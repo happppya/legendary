@@ -2,6 +2,8 @@
 // Slim application status strip along the bottom edge: realm node/link
 // counts on the left, environment state on the right.
 
+import { computed } from 'vue'
+
 const props = defineProps<{
   nodes: number
   links: number
@@ -12,8 +14,6 @@ const props = defineProps<{
 
 const linkWord = computed(() => (props.links === 1 ? 'link' : 'links'))
 const nodeWord = computed(() => (props.nodes === 1 ? 'node' : 'nodes'))
-
-import { computed } from 'vue'
 </script>
 
 <template>

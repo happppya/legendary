@@ -291,6 +291,40 @@ a {
   color: var(--gold);
 }
 
+/* Shared overlay buttons (dialog footers use these across components) */
+.btn-primary {
+  height: 30px;
+  padding: 0 15px;
+  border-radius: var(--r-m);
+  background: var(--btn-primary-bg);
+  border: 1px solid var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--btn-primary-hover);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+}
+
+.btn-secondary {
+  height: 30px;
+  padding: 0 15px;
+  border-radius: var(--r-m);
+  border: 1px solid var(--line-2);
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.btn-secondary:hover {
+  background: var(--bg-2);
+  color: var(--text-1);
+}
+
 ::selection {
   background: rgba(224, 169, 92, 0.32);
   color: inherit;

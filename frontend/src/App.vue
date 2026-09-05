@@ -8,40 +8,45 @@
 // default realm is the mock scene in lib/mockRealm.ts; opening a real realm
 // (File → Open…) swaps every pane onto the real payload while the graph
 // canvas shows its "later milestone" placeholder.
+//
+// Components live in folders by role (shell chrome, workspace panes, full
+// pages, overlays) - see components/. This file owns cross-pane state and
+// routing only: realm data, selection, filters, navigation, menus, palette
+// and dialogs.
 
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { PhFunnel, PhX } from '@phosphor-icons/vue'
-import type { MenuItem, MenuSpec } from './components/MenuBar.vue'
-import TopBar from './components/TopBar.vue'
-import ExplorerPanel from './components/ExplorerPanel.vue'
-import FiltersPanel from './components/FiltersPanel.vue'
-import WorkspaceCenter from './components/WorkspaceCenter.vue'
-import StatusBar from './components/StatusBar.vue'
-import NodeDetail from './components/NodeDetail.vue'
-import BoardView from './components/BoardView.vue'
-import CalendarView from './components/CalendarView.vue'
-import EntitiesView from './components/EntitiesView.vue'
-import SettingsView from './components/SettingsView.vue'
-import CommandPalette, { type PaletteCommand } from './components/CommandPalette.vue'
-import BrandMark from './components/BrandMark.vue'
+import { PhFunnel } from '@phosphor-icons/vue'
+import type { MenuItem, MenuSpec } from './components/shell/MenuBar.vue'
+import TopBar from './components/shell/TopBar.vue'
+import StatusBar from './components/shell/StatusBar.vue'
+import ExplorerPanel from './components/workspace/ExplorerPanel.vue'
+import FiltersPanel from './components/workspace/FiltersPanel.vue'
+import WorkspaceCenter from './components/workspace/WorkspaceCenter.vue'
+import NodeDetail from './components/workspace/detail/NodeDetail.vue'
+import BoardView from './components/pages/BoardView.vue'
+import CalendarView from './components/pages/CalendarView.vue'
+import EntitiesView from './components/pages/EntitiesView.vue'
+import SettingsView from './components/pages/SettingsView.vue'
+import CommandPalette, { type PaletteCommand } from './components/overlays/CommandPalette.vue'
+import AboutDialog from './components/overlays/AboutDialog.vue'
+import OpenRealmDialog from './components/overlays/OpenRealmDialog.vue'
+import NewRealmDialog from './components/overlays/NewRealmDialog.vue'
 import { inDesktop, openRealm } from './api'
 import type { NodeView } from './types'
-import type { CheckRow, FilterModel, TaxRow } from './lib/mockRealm'
+import type { CheckRow, FilterModel, TaxRow } from './lib/filters'
 import {
   disciplineRows,
   emptyFilters,
   epicRows,
   kindRows,
   landmarkRows,
-  linkCount,
   matchesFilters,
-  MOCK_BY_KEY,
-  MOCK_NODES,
-  MOCK_REALM,
   priorityRows,
   statusRows,
   taxTree,
-} from './lib/mockRealm'
+} from './lib/filters'
+import { linkCount } from './lib/node'
+import { MOCK_BY_KEY, MOCK_NODES, MOCK_REALM } from './lib/mockRealm'
 
 type Page = 'workspace' | 'board' | 'entities' | 'calendar' | 'settings'
 
@@ -835,118 +840,24 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
     />
 
     <!-- dialogs -->
-    <div v-if="dialog === 'about'" class="dlg-layer" role="dialog" aria-modal="true" aria-label="About Legendary">
-      <div class="dlg-scrim" @click="dialog = null"></div>
-      <div class="dlg-box about-box">
-        <button type="button" class="dlg-x" aria-label="Close" @click="dialog = null">
-          <PhX :size="13" aria-hidden="true" />
-        </button>
-        <BrandMark :size="30" />
-        <h2 class="about-title">Legendary</h2>
-        <p class="about-sub">Local-first, Markdown-native graph task engine for game development.</p>
-        <p class="about-line mono">
-          version 0.1.0 · {{ isDesktop ? 'desktop shell (live IPC)' : 'web preview (demo fixture)' }}
-        </p>
-        <p class="about-notes">
-          The workspace shell is a preview: read-only realm data, mock graph
-          scene, editor milestone features coming next.
-        </p>
-        <div class="about-actions">
-          <button type="button" class="btn-primary" @click="dialog = null">Done</button>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="dialog === 'open'" class="dlg-layer" role="dialog" aria-modal="true" aria-label="Open realm">
-      <div class="dlg-scrim" @click="dialog = null"></div>
-      <div class="dlg-box">
-        <header class="dlg-head">
-          <h2 class="dlg-title">Open Realm</h2>
-          <button type="button" class="dlg-x" aria-label="Close" @click="dialog = null">
-            <PhX :size="13" aria-hidden="true" />
-          </button>
-        </header>
-
-        <div class="recent-list">
-          <p class="recent-label">Recent realms</p>
-          <button
-            type="button"
-            class="recent-row"
-            :class="{ current: source === 'mock' }"
-            @click="useMockRealm(); dialog = null"
-          >
-            <span class="recent-name">Demo realm — {{ MOCK_REALM.name }}</span>
-            <span class="recent-path mono">{{ MOCK_REALM.path }}</span>
-            <span v-if="source === 'mock'" class="current-tag">current</span>
-          </button>
-          <button
-            v-for="r in recentRealms"
-            :key="r.path"
-            type="button"
-            class="recent-row"
-            :class="{ current: source === 'realm' && realmPath === r.path }"
-            @click="openRecent(r)"
-          >
-            <span class="recent-name">{{ r.label }}</span>
-            <span class="recent-path mono">{{ r.path }}</span>
-            <span v-if="source === 'realm' && realmPath === r.path" class="current-tag">current</span>
-          </button>
-          <p v-if="!recentRealms.length" class="recent-empty">
-            No other realms opened yet.
-          </p>
-        </div>
-
-        <form class="path-form" @submit.prevent="submitOpen">
-          <label class="path-label" for="realm-path">Realm path</label>
-          <div class="path-row">
-            <input
-              id="realm-path"
-              v-model="openPath"
-              class="path-input mono"
-              type="text"
-              spellcheck="false"
-              placeholder="path/to/realm"
-            />
-            <button type="submit" class="btn-primary" :disabled="openBusy">
-              {{ openBusy ? 'Opening…' : 'Open' }}
-            </button>
-          </div>
-          <p v-if="dialogError" class="dlg-error">{{ dialogError }}</p>
-          <p v-if="!isDesktop" class="dlg-hint">
-            In the browser preview only the checked-in demo fixture is available.
-          </p>
-        </form>
-      </div>
-    </div>
-
-    <div v-if="dialog === 'new'" class="dlg-layer" role="dialog" aria-modal="true" aria-label="New realm">
-      <div class="dlg-scrim" @click="dialog = null"></div>
-      <div class="dlg-box">
-        <header class="dlg-head">
-          <h2 class="dlg-title">New Realm</h2>
-          <button type="button" class="dlg-x" aria-label="Close" @click="dialog = null">
-            <PhX :size="13" aria-hidden="true" />
-          </button>
-        </header>
-        <div class="new-fields">
-          <label class="path-label" for="new-name">Realm name</label>
-          <input id="new-name" class="path-input" type="text" placeholder="My Game" disabled />
-          <label class="path-label" for="new-loc">Location</label>
-          <input id="new-loc" class="path-input mono" type="text" placeholder="choose a folder…" disabled />
-        </div>
-        <div class="new-note">
-          <p>
-            Creating realms from the app lands with the file-watcher milestone.
-            From a terminal today:
-          </p>
-          <pre class="new-cmd">legend init path/to/my-realm</pre>
-        </div>
-        <div class="dlg-actions">
-          <button type="button" class="btn-secondary" @click="dialog = null">Cancel</button>
-          <button type="button" class="btn-primary" disabled title="Available in a later milestone">Create Realm</button>
-        </div>
-      </div>
-    </div>
+    <AboutDialog v-if="dialog === 'about'" :is-desktop="isDesktop" @close="dialog = null" />
+    <OpenRealmDialog
+      v-if="dialog === 'open'"
+      :realm-path="realmPath"
+      :is-mock="source === 'mock'"
+      :mock-name="MOCK_REALM.name"
+      :mock-path="MOCK_REALM.path"
+      :recents="recentRealms"
+      :busy="openBusy"
+      :error="dialogError"
+      :is-desktop="isDesktop"
+      v-model:path="openPath"
+      @close="dialog = null"
+      @use-mock="useMockRealm(); dialog = null"
+      @open-recent="openRecent"
+      @submit="submitOpen"
+    />
+    <NewRealmDialog v-if="dialog === 'new'" @close="dialog = null" />
   </div>
 </template>
 
@@ -1019,289 +930,5 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
   .inspector {
     width: 268px;
   }
-}
-
-/* ---- dialogs --------------------------------------------------------- */
-
-.dlg-layer {
-  position: fixed;
-  inset: 0;
-  z-index: 300;
-}
-
-.dlg-scrim {
-  position: absolute;
-  inset: 0;
-  background: rgba(4, 7, 12, 0.46);
-  backdrop-filter: blur(1px);
-}
-
-.dlg-box {
-  position: relative;
-  width: min(520px, 90vw);
-  margin: 14vh auto 0;
-  background: var(--bg-1);
-  border: 1px solid var(--line-2);
-  border-radius: var(--r-l);
-  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.4);
-  padding: 18px 20px;
-}
-
-.dlg-x {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--r-s);
-  color: var(--text-3);
-}
-
-.dlg-x:hover {
-  background: var(--bg-2);
-  color: var(--text-1);
-}
-
-.dlg-head {
-  margin-bottom: 12px;
-}
-
-.dlg-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-1);
-}
-
-.recent-label {
-  margin: 4px 0 6px;
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-  color: var(--faint);
-}
-
-.recent-list {
-  max-height: 190px;
-  overflow-y: auto;
-  margin-bottom: 14px;
-}
-
-.recent-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 7px 9px;
-  border-radius: var(--r-m);
-  color: var(--text-2);
-  text-align: left;
-}
-
-.recent-row:hover {
-  background: var(--bg-2);
-  color: var(--text-1);
-}
-
-.recent-row.current {
-  background: var(--sel-bg);
-}
-
-.recent-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12.5px;
-}
-
-.recent-path {
-  flex: none;
-  font-size: 10px;
-  color: var(--faint);
-}
-
-.current-tag {
-  flex: none;
-  font-size: 9px;
-  color: var(--gold);
-  border: 1px solid var(--gold);
-  border-radius: 999px;
-  padding: 0 6px;
-}
-
-.recent-empty {
-  margin: 2px 0;
-  font-size: 11.5px;
-  color: var(--faint);
-}
-
-.path-form {
-  border-top: 1px solid var(--line-1);
-  padding-top: 12px;
-}
-
-.path-label {
-  display: block;
-  font-size: 11px;
-  color: var(--text-3);
-  margin-bottom: 5px;
-}
-
-.path-row {
-  display: flex;
-  gap: 8px;
-}
-
-.path-input {
-  flex: 1;
-  min-width: 0;
-  height: 30px;
-  padding: 0 10px;
-  border-radius: var(--r-m);
-  border: 1px solid var(--line-1);
-  background: var(--inset);
-  color: var(--text-1);
-  font-size: 12px;
-  outline: none;
-}
-
-.path-input:focus {
-  border-color: var(--gold);
-}
-
-.path-input:disabled {
-  opacity: 0.5;
-}
-
-.btn-primary {
-  height: 30px;
-  padding: 0 15px;
-  border-radius: var(--r-m);
-  background: var(--btn-primary-bg);
-  border: 1px solid var(--btn-primary-bg);
-  color: var(--btn-primary-fg);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--btn-primary-hover);
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-}
-
-.btn-secondary {
-  height: 30px;
-  padding: 0 15px;
-  border-radius: var(--r-m);
-  border: 1px solid var(--line-2);
-  color: var(--text-2);
-  font-size: 12px;
-}
-
-.btn-secondary:hover {
-  background: var(--bg-2);
-  color: var(--text-1);
-}
-
-.dlg-error {
-  margin: 8px 0 0;
-  color: var(--err-fg);
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-
-.dlg-hint {
-  margin: 8px 0 0;
-  color: var(--faint);
-  font-size: 11px;
-}
-
-.new-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.new-fields .path-input {
-  margin-bottom: 8px;
-}
-
-.new-note {
-  border-top: 1px solid var(--line-1);
-  margin-top: 4px;
-  padding-top: 10px;
-}
-
-.new-note p {
-  margin: 0 0 6px;
-  font-size: 12px;
-  color: var(--text-3);
-}
-
-.new-cmd {
-  margin: 0;
-  background: var(--code-bg);
-  border: 1px solid var(--code-line);
-  border-radius: var(--r-m);
-  padding: 8px 12px;
-  font-size: 11.5px;
-  color: var(--text-1);
-}
-
-.dlg-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.about-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 4px;
-}
-
-.about-box .brand-mark {
-  margin-bottom: 6px;
-}
-
-.about-title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.about-sub {
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--text-2);
-  max-width: 360px;
-}
-
-.about-line {
-  font-size: 10.5px;
-  color: var(--faint);
-}
-
-.about-notes {
-  font-size: 11.5px;
-  color: var(--text-3);
-  max-width: 380px;
-  margin: 4px 0 10px;
-}
-
-.about-actions {
-  margin-top: 4px;
 }
 </style>

@@ -3,8 +3,8 @@
 // nodes by title/id. Arrow keys navigate, Enter runs, Esc closes.
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { NodeView } from '../types'
-import { KIND_ICON } from '../lib/kind'
+import type { NodeView } from '../../types'
+import { KIND_ICON } from '../../lib/kind'
 
 export interface PaletteCommand {
   id: string

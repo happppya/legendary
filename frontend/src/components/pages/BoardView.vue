@@ -5,18 +5,13 @@
 
 import { computed } from 'vue'
 import { PhPlus } from '@phosphor-icons/vue'
-import type { NodeView } from '../types'
-import { KIND_ICON, KIND_LABEL } from '../lib/kind'
+import type { NodeView } from '../../types'
+import { KIND_ICON, KIND_LABEL } from '../../lib/kind'
+import { STATUSES } from '../../lib/status'
+import { qpOf } from '../../lib/node'
 
 const props = defineProps<{ nodes: NodeView[]; selectedId: string | null }>()
 const emit = defineEmits<{ select: [id: string] }>()
-
-const STATUSES = [
-  { key: 'unstarted', label: 'Unstarted' },
-  { key: 'active', label: 'Active' },
-  { key: 'blocked', label: 'Blocked' },
-  { key: 'vanquished', label: 'Vanquished' },
-] as const
 
 const columns = computed(() =>
   STATUSES.map((s) => ({
@@ -27,10 +22,6 @@ const columns = computed(() =>
 
 function cardTitle(n: NodeView): string {
   return n.title
-}
-
-function qpOf(n: NodeView): number | null {
-  return n.kind === 'card' ? (n.totalQp > 0 ? n.totalQp : null) : n.questPoints
 }
 </script>
 

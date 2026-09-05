@@ -5,7 +5,7 @@
 // below it stay interactive.
 
 import { onMounted, ref } from 'vue'
-import { inDesktop } from '../api'
+import { inDesktop } from '../../api'
 import BrandMark from './BrandMark.vue'
 import MenuBar, { type MenuSpec } from './MenuBar.vue'
 

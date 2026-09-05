@@ -12,6 +12,9 @@ import type { NodeView } from '../types'
 
 export type Kind = NodeView['kind']
 
+/** Kind keys in canonical display order. */
+export const KINDS: readonly Kind[] = ['card', 'action', 'guard', 'idea']
+
 export const KIND_ICON: Record<Kind, Component> = {
   card: PhSquaresFour,
   action: PhLightning,
@@ -24,6 +27,14 @@ export const KIND_LABEL: Record<Kind, string> = {
   action: 'Action',
   guard: 'Guard',
   idea: 'Idea',
+}
+
+/** Sort rank: card → action → guard → idea. */
+export const KIND_RANK: Record<Kind, number> = {
+  card: 0,
+  action: 1,
+  guard: 2,
+  idea: 3,
 }
 
 export function kindOf(n: Pick<NodeView, 'kind'>): Kind {

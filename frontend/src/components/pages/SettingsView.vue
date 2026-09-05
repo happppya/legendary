@@ -4,8 +4,8 @@
 // roadmap so the shell does not feel dead.
 
 import { PhSun } from '@phosphor-icons/vue'
-import { inDesktop } from '../api'
-import BrandMark from './BrandMark.vue'
+import { inDesktop } from '../../api'
+import BrandMark from '../shell/BrandMark.vue'
 
 defineProps<{
   theme: 'dark' | 'light'

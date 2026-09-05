@@ -5,6 +5,10 @@
 // doc 07) auto-lays the scene out. Pause it to freeze, drag any node to
 // re-arrange the neighbourhood, and hit "auto-layout" to scatter it again.
 //
+// The physics lives in ./physics.ts, scene seeding/layout in ./scene.ts and
+// edge discovery/geometry in ./edges.ts; this file only wires them to the
+// SVG, drag handling, zoom and breadcrumb chrome.
+//
 // Node shapes follow design doc 05: Cards are squares, Actions pills,
 // Guards diamonds and Ideas dashed pills. Clicking a node drives the shared
 // selection, breadcrumb and inspector.
@@ -19,9 +23,13 @@ import {
   PhPlus,
   PhDotsThreeOutlineVertical,
 } from '@phosphor-icons/vue'
-import type { NodeView } from '../types'
-import { KIND_LABEL } from '../lib/kind'
-import { MOCK_BY_KEY, SCENE_HEIGHT, SCENE_LINKS, SCENE_SPOTS, SCENE_WIDTH } from '../lib/mockRealm'
+import type { NodeView } from '../../../types'
+import { KIND_LABEL } from '../../../lib/kind'
+import { ancestorChain } from '../../../lib/node'
+import { SCENE_HEIGHT, SCENE_WIDTH } from '../../../lib/mockRealm'
+import { buildSceneItems, MAX_SCENE_NODES, scatterAll, sceneCenter, sceneSignature, type SceneItem } from './scene'
+import { applyForces } from './physics'
+import { drawEdges, linkedPairs, sceneEdges } from './edges'
 
 const props = defineProps<{
   nodesById: Map<string, NodeView>
@@ -32,122 +40,20 @@ const props = defineProps<{
 
 const emit = defineEmits<{ select: [id: string] }>()
 
-/* ---- sizes per kind (centred at x,y) ---------------------------------- */
-
-const KIND_SIZE: Record<string, { w: number; h: number }> = {
-  card: { w: 190, h: 56 },
-  action: { w: 172, h: 30 },
-  idea: { w: 172, h: 30 },
-  guard: { w: 46, h: 46 },
-}
-
-interface SceneItem {
-  key: string
-  node: NodeView
-  x: number
-  y: number
-  w: number
-  h: number
-  vx: number
-  vy: number
-}
-
 /** Node metadata + live physics state, keyed by scene spot key. */
 const live = ref<SceneItem[]>([])
 
-const cx = SCENE_WIDTH / 2
-const cy = SCENE_HEIGHT / 2
-
-/** Whole-realm scenes above this node count wait for the Wasm physics
- * engine (doc 07 / Milestone 5) instead of the prototype simulator. */
-const MAX_SCENE_NODES = 200
-
-/** Deterministic scatter for realm-wide scenes (ring around the centre). */
-function scatterPosition(key: string, index: number, total: number) {
-  const base = Math.min(SCENE_WIDTH, SCENE_HEIGHT) * 0.42
-  const ang = (index / total) * Math.PI * 2 + seedN(key) * 1.4
-  const rad = base * (0.5 + 0.9 * seedN(key + 'r'))
-  return {
-    x: cx + Math.cos(ang) * rad,
-    y: cy + Math.sin(ang) * rad,
-    vx: (seedN(key + 'vx') - 0.5) * 2.4,
-    vy: (seedN(key + 'vy') - 0.5) * 2.4,
-  }
-}
-
-function seed(): SceneItem[] {
-  const out: SceneItem[] = []
-  if (props.isMockScene) {
-    // Curated local scene around Character Movement Core.
-    for (const spot of SCENE_SPOTS) {
-      const id = MOCK_BY_KEY.get(spot.key)?.id ?? spot.key
-      const node = props.nodesById.get(id)
-      if (!node) continue
-      const size = KIND_SIZE[node.kind] ?? KIND_SIZE.action
-      // deterministic tiny jitter so the first auto-layout visibly settles
-      const jitter = (seedN(spot.key) - 0.5) * 14
-      out.push({
-        key: spot.key,
-        node,
-        x: spot.x,
-        y: spot.y + jitter,
-        w: size.w,
-        h: size.h,
-        vx: (seedN(spot.key + 'x') - 0.5) * 1.6,
-        vy: (seedN(spot.key + 'y') - 0.5) * 1.6,
-      })
-    }
-    return out
-  }
-  // Real realm: force-lay the whole realm tree, seeded on a ring so the
-  // simulator visibly settles into the dependency structure.
-  const size = props.nodesById.size
-  if (size === 0 || size > MAX_SCENE_NODES) return out
-  let i = 0
-  for (const node of props.nodesById.values()) {
-    const dim = KIND_SIZE[node.kind] ?? KIND_SIZE.action
-    const p = scatterPosition(node.id, i, size)
-    out.push({
-      key: node.id,
-      node,
-      x: p.x,
-      y: p.y,
-      w: dim.w,
-      h: dim.h,
-      vx: p.vx,
-      vy: p.vy,
-    })
-    i += 1
-  }
-  return out
-}
-
-/** Cheap deterministic pseudo-random for stable-but-varied starts. */
-function seedN(s: string): number {
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return ((h >>> 0) % 1000) / 1000
-}
+const { x: cx, y: cy } = sceneCenter()
 
 /** Scene signature - re-seed only when the member set really changes (realm
  * open/reload, or the mock/local scene swaps). Dragging and auto-layout do
  * not touch it, so a settled layout survives navigation. */
-function sceneSig(): string {
-  if (props.isMockScene) {
-    return 'm|' + SCENE_SPOTS.map((s) => s.key).sort().join('|')
-  }
-  return 'r|' + [...props.nodesById.keys()].sort().join('|')
-}
-
 let seededSig = ''
 function syncScene() {
-  const sig = sceneSig()
+  const sig = sceneSignature(props)
   if (sig === seededSig) return
   seededSig = sig
-  live.value = seed()
+  live.value = buildSceneItems(props)
   if (live.value.length >= 2) ensureLoop()
 }
 
@@ -162,150 +68,33 @@ const playing = ref(true)
 let rafId = 0
 let lastStep = 0
 
-// Spring / repulsion tuning for a calm, readable settle.
-const REST = 165
-const SPRING = 0.006
-const REPULSION = 26000
-const GRAVITY = 0.0009
-const DAMPING = 0.88
-const MAX_SPEED = 5
-
-interface SceneLinkDef {
-  from: string
-  to: string
-  dashed?: boolean
-  /** A true prerequisite edge (blocked_by), drawn with a dependency arrow. */
-  dep?: boolean
-}
-
-/** Directed edges for the current scene: the curated mock links, or - for a
- * real realm - every parent edge plus every blocked_by dependency edge that
- * points at a node present in the payload. */
-function sceneEdges(): SceneLinkDef[] {
-  if (props.isMockScene) return SCENE_LINKS
-  const out: SceneLinkDef[] = []
-  for (const [id, node] of props.nodesById) {
-    if (node.parent && props.nodesById.has(node.parent)) out.push({ from: node.parent, to: id })
-    for (const b of node.blockedBy) {
-      if (props.nodesById.has(b)) out.push({ from: b, to: id, dep: true })
-    }
-  }
-  return out
-}
-
-// Linked pairs share a Hooke spring toward REST; everything else just
+// Linked pairs share a Hooke spring toward rest; everything else just
 // repels, so connected clusters stay tight while unrelated nodes part.
-const LINKED = computed(() => {
-  const s = new Set<string>()
-  for (const l of sceneEdges()) s.add(`${l.from}␟${l.to}`)
-  return s
-})
+const linked = computed(() => linkedPairs(sceneEdges(props.isMockScene, props.nodesById)))
 
 function step(timestamp: number) {
   rafId = 0
   const dt = Math.min(0.05, Math.max(0.005, (timestamp - lastStep) / 1000 || 0.016))
   lastStep = timestamp
-  if (playing.value) applyForces(dt)
+  if (playing.value) applyForces(live.value, draggingKey.value, linked.value, dt)
   if (playing.value) rafId = requestAnimationFrame(step)
-}
-
-function applyForces(dt: number) {
-  const items = live.value
-  if (items.length < 2) return
-  const dragKey = draggingKey.value
-
-  // pair forces (O(n^2) fine for the local scene; the Wasm engine in doc 07
-  // is where this goes Barnes–Hut for whole-realm canvases)
-  for (let i = 0; i < items.length; i++) {
-    const a = items[i]
-    if (a.key === dragKey) continue
-    for (let j = i + 1; j < items.length; j++) {
-      const b = items[j]
-      if (b.key === dragKey) continue
-      let dx = a.x - b.x
-      let dy = a.y - b.y
-      let d = Math.hypot(dx, dy)
-      if (d < 1) {
-        dx = (seedN(a.key + b.key) - 0.5) * 2
-        dy = (seedN(b.key + a.key) - 0.5) * 2
-        d = Math.hypot(dx, dy) || 1
-      }
-      // charge: inverse-square repulsion (capped to stay stable)
-      const fr = Math.min(1.4, REPULSION / (d * d))
-      // edge spring: when this pair is linked, tug it back toward REST
-      const linked = LINKED.value.has(`${a.key}␟${b.key}`) || LINKED.value.has(`${b.key}␟${a.key}`)
-      const fs = linked && d > REST ? (d - REST) * SPRING : 0
-      const f = fr - fs
-      const ux = dx / d
-      const uy = dy / d
-      a.vx += ux * f
-      a.vy += uy * f
-      b.vx -= ux * f
-      b.vy -= uy * f
-    }
-  }
-
-  for (const n of items) {
-    if (n.key === dragKey) continue
-
-    // weak pull toward canvas centre keeps the cluster on-screen
-    n.vx += (cx - n.x) * GRAVITY
-    n.vy += (cy - n.y) * GRAVITY
-
-    const sp = Math.hypot(n.vx, n.vy)
-    if (sp > MAX_SPEED) {
-      n.vx = (n.vx / sp) * MAX_SPEED
-      n.vy = (n.vy / sp) * MAX_SPEED
-    }
-    n.vx *= DAMPING
-    n.vy *= DAMPING
-    n.x += n.vx * dt * 60
-    n.y += n.vy * dt * 60
-
-    // keep the whole shape (plus guard captions) inside the canvas
-    const hw = n.w / 2 + (n.node.kind === 'guard' ? 44 : 14)
-    const hh = n.h / 2 + (n.node.kind === 'guard' ? 22 : 10)
-    if (n.x < hw) {
-      n.x = hw
-      n.vx *= -0.3
-    } else if (n.x > SCENE_WIDTH - hw) {
-      n.x = SCENE_WIDTH - hw
-      n.vx *= -0.3
-    }
-    if (n.y < hh) {
-      n.y = hh
-      n.vy *= -0.3
-    } else if (n.y > SCENE_HEIGHT - hh) {
-      n.y = SCENE_HEIGHT - hh
-      n.vy *= -0.3
-    }
-  }
-}
-
-/** Scatter the nodes and let the simulator re-settle them. */
-function autoLayout() {
-  const items = live.value
-  const base = Math.min(SCENE_WIDTH, SCENE_HEIGHT) * 0.42
-  for (let i = 0; i < items.length; i++) {
-    const ang = (i / items.length) * Math.PI * 2 + 0.6
-    const rad = base * (0.55 + 0.9 * seedN(items[i].key + 'r'))
-    items[i].x = cx + Math.cos(ang) * rad
-    items[i].y = cy + Math.sin(ang) * rad
-    items[i].vx = (seedN(items[i].key + 'vx') - 0.5) * 3
-    items[i].vy = (seedN(items[i].key + 'vy') - 0.5) * 3
-  }
-  ensureLoop()
-}
-
-function togglePlay() {
-  playing.value = !playing.value
-  if (playing.value) ensureLoop()
 }
 
 function ensureLoop() {
   if (rafId || !playing.value || live.value.length < 2) return
   lastStep = performance.now()
   rafId = requestAnimationFrame(step)
+}
+
+/** Scatter the nodes and let the simulator re-settle them. */
+function autoLayout() {
+  scatterAll(live.value)
+  ensureLoop()
+}
+
+function togglePlay() {
+  playing.value = !playing.value
+  if (playing.value) ensureLoop()
 }
 
 watch(playing, (v) => {
@@ -375,7 +164,9 @@ function onClickItem(item: SceneItem) {
     return
   }
   emit('select', item.node.id)
-}onBeforeUnmount(() => {
+}
+
+onBeforeUnmount(() => {
   if (rafId) cancelAnimationFrame(rafId)
   rafId = 0
   window.removeEventListener('pointermove', onPointerMove)
@@ -399,37 +190,7 @@ function resetZoom() {
 
 /* ---- edges ------------------------------------------------------------------- */
 
-interface DrawnEdge {
-  dashed: boolean
-  dep: boolean
-  x1: number
-  y1: number
-  x2: number
-  y2: number
-}
-
-const edges = computed<DrawnEdge[]>(() => {
-  const byKey = new Map(live.value.map((s) => [s.key, s]))
-  const out: DrawnEdge[] = []
-  for (const link of sceneEdges()) {
-    const a = byKey.get(link.from)
-    const b = byKey.get(link.to)
-    if (!a || !b) continue
-    const ax = a.x + (a.x < b.x ? a.w / 2 : a.x > b.x ? -a.w / 2 : 0)
-    const ay = a.y + (a.y < b.y ? a.h / 2 : a.y > b.y ? -a.h / 2 : 0)
-    const bx = b.x + (b.x > a.x ? -b.w / 2 : b.x < a.x ? b.w / 2 : 0)
-    const by = b.y + (b.y > a.y ? -b.h / 2 : b.y < a.y ? b.h / 2 : 0)
-    out.push({
-      dashed: !!link.dashed,
-      dep: !!link.dep,
-      x1: ax,
-      y1: ay,
-      x2: bx,
-      y2: by,
-    })
-  }
-  return out
-})
+const edges = computed(() => drawEdges(live.value, sceneEdges(props.isMockScene, props.nodesById)))
 
 /** Why the canvas is empty (if it is) - drives the fallback copy. */
 const sceneHolds = computed<'mock' | 'realm' | 'empty' | 'large'>(() => {
@@ -447,12 +208,8 @@ function trunc(title: string, n: number): string {
 
 const crumbs = computed<{ id: string | null; label: string }[]>(() => {
   const out: { id: string | null; label: string }[] = [{ id: null, label: props.realmName }]
-  let cur = props.selectedId ? props.nodesById.get(props.selectedId) : null
-  const chain: NodeView[] = []
-  while (cur) {
-    chain.unshift(cur)
-    cur = cur.parent ? (props.nodesById.get(cur.parent) ?? null) : null
-  }
+  const chain = ancestorChain(props.nodesById, props.selectedId)
+  if (!chain.length) return out
   const shown = chain.length > 4 ? chain.slice(chain.length - 4) : chain
   if (chain.length > 4) out.push({ id: null, label: '…' })
   for (const n of shown) out.push({ id: n.id, label: n.title })

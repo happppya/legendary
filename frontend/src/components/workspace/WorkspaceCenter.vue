@@ -3,9 +3,9 @@
 // closable tab and a draggable divider between them.
 
 import { onBeforeUnmount, ref } from 'vue'
-import type { NodeView } from '../types'
-import type { CheckRow, FilterModel } from '../lib/mockRealm'
-import GraphPane from './GraphPane.vue'
+import type { NodeView } from '../../types'
+import type { CheckRow, FilterModel } from '../../lib/filters'
+import GraphPane from './graph/GraphPane.vue'
 import TablePane from './TablePane.vue'
 
 defineProps<{

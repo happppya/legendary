@@ -14,10 +14,13 @@ import {
   PhPlus,
   PhX,
 } from '@phosphor-icons/vue'
-import type { NodeView } from '../types'
-import type { CheckRow, FilterModel } from '../lib/mockRealm'
-import { matchesFilters } from '../lib/mockRealm'
-import { KIND_ICON, KIND_LABEL } from '../lib/kind'
+import type { NodeView } from '../../types'
+import type { CheckRow, FilterModel } from '../../lib/filters'
+import { matchesFilters } from '../../lib/filters'
+import { KIND_ICON, KIND_LABEL, KIND_RANK } from '../../lib/kind'
+import { STATUS_KEYS, STATUS_LABEL, STATUS_RANK } from '../../lib/status'
+import { PRIORITY_LABEL, PRIORITY_RANK } from '../../lib/priority'
+import { qpOf } from '../../lib/node'
 
 const props = defineProps<{
   nodes: NodeView[]
@@ -60,10 +63,6 @@ function toggleCol(key: ColKey) {
 
 /* ---- sorting ------------------------------------------------------------ */
 
-const STATUS_ORDER: Record<string, number> = { unstarted: 0, active: 1, blocked: 2, vanquished: 3 }
-const KIND_ORDER: Record<string, number> = { card: 0, action: 1, guard: 2, idea: 3 }
-const PRIORITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
-
 const sort = ref<{ key: ColKey; dir: 1 | -1 } | null>(null)
 
 function sortBy(key: ColKey) {
@@ -73,10 +72,6 @@ function sortBy(key: ColKey) {
     return
   }
   sort.value = { key, dir: 1 }
-}
-
-function qpOf(n: NodeView): number {
-  return n.kind === 'card' ? n.totalQp : (n.questPoints ?? 0)
 }
 
 const visible = computed(() =>
@@ -93,13 +88,13 @@ const rows = computed(() => {
         case 'title':
           return a.title.localeCompare(b.title)
         case 'kind':
-          return KIND_ORDER[a.kind] - KIND_ORDER[b.kind]
+          return KIND_RANK[a.kind] - KIND_RANK[b.kind]
         case 'status':
-          return STATUS_ORDER[a.effectiveStatus] - STATUS_ORDER[b.effectiveStatus]
+          return (STATUS_RANK[a.effectiveStatus] ?? 0) - (STATUS_RANK[b.effectiveStatus] ?? 0)
         case 'priority':
-          return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]
+          return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
         case 'qp':
-          return qpOf(a) - qpOf(b)
+          return (qpOf(a) ?? 0) - (qpOf(b) ?? 0)
         case 'epics':
           return a.epics.join(' / ').localeCompare(b.epics.join(' / '))
         case 'disciplines':
@@ -116,8 +111,6 @@ const rows = computed(() => {
 })
 
 /* ---- status pills --------------------------------------------------------- */
-
-const PILLS = ['unstarted', 'active', 'blocked', 'vanquished'] as const
 
 function pillOn(key: string): boolean {
   return props.filters.statuses.has(key)
@@ -154,7 +147,7 @@ function rowClass(n: NodeView): string {
 
         <span class="pill-row" role="group" aria-label="Filter by status">
           <button
-            v-for="p in PILLS"
+            v-for="p in STATUS_KEYS"
             :key="p"
             type="button"
             class="pill"
@@ -163,7 +156,7 @@ function rowClass(n: NodeView): string {
             @click="emit('toggleStatus', p)"
           >
             <span class="sdot" :class="`dot-${p}`" aria-hidden="true"></span>
-            {{ p[0]!.toUpperCase() + p.slice(1) }}
+            {{ STATUS_LABEL[p] }}
             <span class="pcount mono">{{ props.statusCounts.find((r) => r.key === p)?.count ?? 0 }}</span>
           </button>
           <button
@@ -286,13 +279,13 @@ function rowClass(n: NodeView): string {
             <td class="col-status">
               <span class="st" :class="`st-${n.effectiveStatus}`">
                 <i class="sdot" :class="`dot-${n.effectiveStatus}`" aria-hidden="true"></i>
-                {{ n.effectiveStatus[0]!.toUpperCase() + n.effectiveStatus.slice(1) }}
+                {{ STATUS_LABEL[n.effectiveStatus] }}
               </span>
             </td>
             <td class="col-priority">
               <span class="st">
                 <i class="pdot" :class="`p-${n.priority}`" aria-hidden="true"></i>
-                {{ n.priority[0]!.toUpperCase() + n.priority.slice(1) }}
+                {{ PRIORITY_LABEL[n.priority] }}
               </span>
             </td>
             <td class="col-qp mono">

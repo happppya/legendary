@@ -10,6 +10,11 @@
 // numbers. Swapping `openRealm`'s result in for `MOCK_NODES` later keeps
 // every pane working.
 //
+// This module is deliberately *content only*: the shared filter/row
+// vocabulary lives in `lib/filters.ts`, node helpers in `lib/node.ts` and
+// the kind/status/priority label maps in `lib/kind`/`lib/status`/
+// `lib/priority`.
+//
 // Design-truth notes (design docs 02/03/04):
 //   - ids are immutable `KIND-XXXX`; every file lives in `Nodes/`.
 //   - status is authored (unstarted | active | vanquished); `blocked` is
@@ -558,247 +563,6 @@ export function mockNode(key: string): BuiltNode {
 }
 
 /* ------------------------------------------------------------------ */
-/* Derived counts + filter row vocabulary                              */
-/* ------------------------------------------------------------------ */
-
-export interface FilterModel {
-  search: string
-  kinds: Set<string>
-  statuses: Set<string>
-  priorities: Set<string>
-  epics: Set<string>
-  disciplines: Set<string>
-  landmarks: Set<string>
-}
-
-export function emptyFilters(): FilterModel {
-  return {
-    search: '',
-    kinds: new Set<string>(),
-    statuses: new Set<string>(),
-    priorities: new Set<string>(),
-    epics: new Set<string>(),
-    disciplines: new Set<string>(),
-    landmarks: new Set<string>(),
-  }
-}
-
-export interface CheckRow {
-  key: string
-  label: string
-  count: number
-}
-
-export const STATUS_LABEL: Record<string, string> = {
-  active: 'Active',
-  blocked: 'Blocked',
-  unstarted: 'Unstarted',
-  vanquished: 'Vanquished',
-}
-export const KIND_LABEL: Record<string, string> = {
-  card: 'Card',
-  action: 'Action',
-  guard: 'Guard',
-  idea: 'Idea',
-}
-export const PRIORITY_LABEL: Record<string, string> = {
-  critical: 'Critical',
-  high: 'High',
-  medium: 'Medium',
-  low: 'Low',
-}
-
-export function kindRows(nodes: readonly NodeView[] = MOCK_NODES): CheckRow[] {
-  return (['card', 'action', 'guard', 'idea'] as const).map((k) => ({
-    key: k,
-    label: KIND_LABEL[k],
-    count: nodes.filter((n) => n.kind === k).length,
-  }))
-}
-
-export function statusRows(nodes: readonly NodeView[] = MOCK_NODES): CheckRow[] {
-  return (['unstarted', 'active', 'blocked', 'vanquished'] as const).map((s) => ({
-    key: s,
-    label: STATUS_LABEL[s],
-    count: nodes.filter((n) => n.effectiveStatus === s).length,
-  }))
-}
-
-export function priorityRows(nodes: readonly NodeView[] = MOCK_NODES): CheckRow[] {
-  return (['critical', 'high', 'medium', 'low'] as const).map((p) => ({
-    key: p,
-    label: PRIORITY_LABEL[p],
-    count: nodes.filter((n) => n.priority === p).length,
-  }))
-}
-
-/**
- * Hierarchical path vocabulary presented as a flat checklist. A deep path
- * like `Combat Engine/Locomotion` contributes its leaf (`Locomotion`) so the
- * list stays readable; matching treats a label as addressable anywhere it
- * appears: as a whole path, as a path prefix, or as a segment of a path.
- */
-function branchRows(
-  field: 'epics' | 'disciplines',
-  nodes: readonly NodeView[] = MOCK_NODES,
-): CheckRow[] {
-  const labels = new Set<string>()
-  for (const n of nodes) {
-    for (const path of n[field]) {
-      const parts = path.split('/')
-      labels.add(parts.length > 1 ? (parts[parts.length - 1] as string) : path)
-    }
-  }
-  const rows: CheckRow[] = []
-  for (const label of labels) {
-    const count = nodes.filter((n) => n[field].some((p) => labelMatches(p, label))).length
-    rows.push({ key: label, label, count })
-  }
-  return rows.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
-}
-
-function labelMatches(path: string, label: string): boolean {
-  return path === label || path.startsWith(`${label}/`) || path.split('/').includes(label)
-}
-
-export function epicRows(nodes?: readonly NodeView[]): CheckRow[] {
-  return branchRows('epics', nodes)
-}
-
-export function disciplineRows(nodes?: readonly NodeView[]): CheckRow[] {
-  return branchRows('disciplines', nodes)
-}
-
-export function landmarkRows(nodes: readonly NodeView[] = MOCK_NODES): CheckRow[] {
-  const counts = new Map<string, number>()
-  for (const n of nodes) {
-    if (!n.landmark) continue
-    counts.set(n.landmark, (counts.get(n.landmark) ?? 0) + 1)
-  }
-  return [...counts.entries()]
-    .map(([key, count]) => ({ key, label: key, count }))
-    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
-}
-
-/** One node in a collapsible taxonomy hierarchy. `children` present when
- * slash-path values ("Programming/Locomotion") exist under this root. */
-export interface TaxRow {
-  /** Filter address: the value nodes must match (root prefixes match below). */
-  key: string
-  label: string
-  count: number
-  children?: TaxRow[]
-}
-
-/**
- * Taxonomy navigator rows for an epic or discipline vocabulary (doc 05 §5.4).
- * Slash-path values group under their root category ("Combat_Engine" owns
- * "Combat_Engine/Locomotion"…); flat values stay top-level leaves, and a root
- * used bare (e.g. epic on the category card itself) is folded into the root
- * row's count. Row counts are unique nodes attached to that branch or any
- * sub-branch, so checking a root filters its whole subtree via the existing
- * prefix matching in `matchesFilters`.
- */
-export function taxTree(
-  field: 'epics' | 'disciplines',
-  nodes: readonly NodeView[] = MOCK_NODES,
-): TaxRow[] {
-  const byValue = new Map<string, number>()
-  for (const n of nodes) {
-    for (const v of n[field]) {
-      byValue.set(v, (byValue.get(v) ?? 0) + 1)
-    }
-  }
-  if (![...byValue.keys()].some((v) => v.includes('/'))) {
-    return [...byValue.entries()]
-      .map(([key, count]) => ({ key, label: key, count }))
-      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
-  }
-
-  const byRoot = new Map<string, { key: string; label: string; count: number }[]>()
-  const bare: { key: string; label: string; count: number }[] = []
-  for (const [value, count] of byValue) {
-    const idx = value.indexOf('/')
-    if (idx === -1) {
-      bare.push({ key: value, label: value, count })
-      continue
-    }
-    const root = value.slice(0, idx)
-    const kids = byRoot.get(root) ?? []
-    kids.push({ key: value, label: value.slice(idx + 1), count })
-    byRoot.set(root, kids)
-  }
-
-  const rows: TaxRow[] = []
-  for (const [root, kids] of byRoot) {
-    const attached = new Set<string>()
-    for (const n of nodes) {
-      if (n[field].some((p) => p === root || p.startsWith(`${root}/`))) attached.add(n.id)
-    }
-    kids.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
-    rows.push({ key: root, label: root, count: attached.size, children: kids })
-  }
-  for (const b of bare) rows.push(b)
-  return rows.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
-}
-
-/* ------------------------------------------------------------------ */
-/* Filter matching                                                     */
-/* ------------------------------------------------------------------ */
-
-export function matchesFilters(n: NodeView, f: FilterModel): boolean {
-  if (f.kinds.size && !f.kinds.has(n.kind)) return false
-  if (f.statuses.size && !f.statuses.has(n.effectiveStatus)) return false
-  if (f.priorities.size && !f.priorities.has(n.priority)) return false
-  if (f.epics.size && !pathAny(n.epics, f.epics)) return false
-  if (f.disciplines.size && !pathAny(n.disciplines, f.disciplines)) return false
-  if (f.landmarks.size && !(n.landmark !== null && f.landmarks.has(n.landmark))) return false
-
-  const q = f.search.trim().toLowerCase()
-  if (q) {
-    const hay = [
-      n.title, n.id, n.kind, n.effectiveStatus, n.status, n.priority,
-      ...n.tags, ...n.epics, ...n.disciplines,
-      n.landmark ?? '', n.parent ?? '', ...n.blockedBy,
-    ]
-      .join(' ')
-      .toLowerCase()
-    if (!hay.includes(q)) return false
-  }
-  return true
-}
-
-function pathAny(paths: string[], selected: Set<string>): boolean {
-  return paths.some((p) => {
-    for (const s of selected) {
-      if (labelMatches(p, s)) return true
-    }
-    return false
-  })
-}
-
-export function toggle<T>(set: Set<T>, value: T): Set<T> {
-  const next = new Set(set)
-  if (next.has(value)) next.delete(value)
-  else next.add(value)
-  return next
-}
-
-/** Edges across the whole realm (parent links + dependencies). */
-export function linkCount(nodes: readonly NodeView[] = MOCK_NODES): number {
-  let n = 0
-  for (const node of nodes) {
-    if (node.parent) n += 1
-    n += node.blockedBy.length
-  }
-  return n
-}
-
-export function statusTotals(nodes: readonly NodeView[] = MOCK_NODES): { nodes: number; links: number } {
-  return { nodes: nodes.length, links: linkCount(nodes) }
-}
-
-/* ------------------------------------------------------------------ */
 /* Local graph scene (the workspace mock)                              */
 /* ------------------------------------------------------------------ */
 
@@ -812,7 +576,9 @@ export interface SceneLink {
   from: string
   to: string
   dashed?: boolean
-}export const SCENE_WIDTH = 860
+}
+
+export const SCENE_WIDTH = 860
 export const SCENE_HEIGHT = 500
 
 /** Layout of the local graph centred on Character Movement Core. */

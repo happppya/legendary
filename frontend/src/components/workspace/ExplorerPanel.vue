@@ -20,8 +20,8 @@ import {
   PhTree,
 } from '@phosphor-icons/vue'
 import type { Component } from 'vue'
-import type { NodeView } from '../types'
-import type { CheckRow, FilterModel, TaxRow } from '../lib/mockRealm'
+import type { NodeView } from '../../types'
+import type { CheckRow, FilterModel, TaxRow } from '../../lib/filters'
 
 const props = defineProps<{
   nodes: NodeView[]

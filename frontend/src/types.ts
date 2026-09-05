@@ -37,13 +37,6 @@ export interface RealmPayload {
   nodes: NodeView[]
 }
 
-export const KIND_RANK: Record<NodeView['kind'], number> = {
-  card: 0,
-  action: 1,
-  guard: 2,
-  idea: 3,
-}
-
 export interface TreeRow {
   node: NodeView
   depth: number

@@ -4,9 +4,9 @@
 // kind filter applied.
 
 import { computed } from 'vue'
-import type { NodeView } from '../types'
-import { KIND_ICON, KIND_LABEL } from '../lib/kind'
-import type { CheckRow } from '../lib/mockRealm'
+import type { NodeView } from '../../types'
+import { KIND_ICON, KIND_LABEL, KINDS } from '../../lib/kind'
+import type { CheckRow } from '../../lib/filters'
 
 const props = defineProps<{ nodes: NodeView[]; kindCounts: CheckRow[] }>()
 const emit = defineEmits<{ browse: [kind: string] }>()
@@ -17,8 +17,6 @@ const DESCRIPTIONS: Record<string, string> = {
   guard: 'Quality gates — code review, QA pass, build verification.',
   idea: 'Speculative pitches and concept exploration.',
 }
-
-const KINDS = ['card', 'action', 'guard', 'idea'] as const
 
 const groups = computed(() =>
   KINDS.map((k) => ({

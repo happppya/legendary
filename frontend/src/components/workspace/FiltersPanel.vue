@@ -5,7 +5,7 @@
 
 import { computed, nextTick, ref, watch } from 'vue'
 import { PhMagnifyingGlass, PhX } from '@phosphor-icons/vue'
-import type { CheckRow, FilterModel } from '../lib/mockRealm'
+import type { CheckRow, FilterModel } from '../../lib/filters'
 
 const props = defineProps<{
   filters: FilterModel
