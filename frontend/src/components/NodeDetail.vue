@@ -19,15 +19,15 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   select: [id: string]
-  filterBy: [term: string]
+  filter: [{ field: 'discipline' | 'epic' | 'tag' | 'landmark'; value: string }]
 }>()
 
 function go(id: string) {
   emit('select', id)
 }
 
-function filterTerm(term: string) {
-  emit('filterBy', term)
+function filterTerm(field: 'discipline' | 'epic' | 'tag' | 'landmark', value: string) {
+  emit('filter', { field, value })
 }
 
 /* ---- position in the realm ------------------------------------------- */
@@ -200,7 +200,7 @@ const hasBody = computed(() => Boolean(props.node?.body.trim()))
             type="button"
             class="tag-chip"
             :title="`Filter nodes by ${d}`"
-            @click="filterTerm(d)"
+            @click="filterTerm('discipline', d)"
           >
             {{ d }}
           </button>
@@ -216,9 +216,9 @@ const hasBody = computed(() => Boolean(props.node?.body.trim()))
             type="button"
             class="tag-chip"
             :title="`Filter nodes by ${e}`"
-            @click="filterTerm(e)"
+            @click="filterTerm('epic', e)"
           >
-            {{ e }}
+            {{ e.split('/').pop() }}
           </button>
         </div>
       </div>
@@ -232,7 +232,7 @@ const hasBody = computed(() => Boolean(props.node?.body.trim()))
             type="button"
             class="tag-chip"
             :title="`Filter nodes tagged ${t}`"
-            @click="filterTerm(t)"
+            @click="filterTerm('tag', t)"
           >
             #{{ t }}
           </button>
@@ -246,7 +246,7 @@ const hasBody = computed(() => Boolean(props.node?.body.trim()))
             type="button"
             class="tag-chip landmark"
             :title="`Filter nodes in landmark ${node.landmark}`"
-            @click="filterTerm(node.landmark)"
+            @click="filterTerm('landmark', node.landmark)"
           >
             {{ node.landmark }}
           </button>

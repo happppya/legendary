@@ -1,0 +1,13 @@
+# .legend/landmarks.yaml
+landmarks:
+  Landmark_01_Demo:
+    title: "Steam Playtest Demo"
+    target_date: "2026-11-15"
+  Landmark_02_Slice:
+    title: "Publisher Vertical Slice"
+    target_date: "2027-02-28"
+
+# Alias mapping prevents broken references when landmark names change
+aliases:
+  "Demo_v1": "Landmark_01_Demo"
+  "Vertical_Slice": "Landmark_02_Slice"

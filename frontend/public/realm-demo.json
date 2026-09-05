@@ -1,0 +1,203 @@
+{
+  "root": "examples/realm-demo",
+  "generatedAt": "2026-09-05T15:14:29Z",
+  "nodeCount": 6,
+  "warnings": [],
+  "nodes": [
+    {
+      "blocked": true,
+      "disciplines": [
+        "Programming/Locomotion",
+        "Programming/Systems"
+      ],
+      "epics": [
+        "Combat_Engine/Locomotion"
+      ],
+      "id": "ACT-3X7P",
+      "kind": "action",
+      "landmark": "Landmark_01_Demo",
+      "parent": "CARD-K9F2",
+      "path": "Nodes/ACT-3X7P_dash_stamina_cost.md",
+      "priority": "high",
+      "status": "active",
+      "tags": [
+        "mechanics"
+      ],
+      "title": "Deduct Stamina on Dash Trigger",
+      "effectiveStatus": "blocked",
+      "questPoints": 3,
+      "explicitLandmark": null,
+      "blockedBy": [
+        "ACT-8J3W"
+      ],
+      "totalQp": 3,
+      "lockedQpPercent": null,
+      "completedAt": null,
+      "createdAt": "2026-09-04T18:10:00Z",
+      "validationError": null,
+      "body": "\n## Action Goal\nDeduct 25 stamina points from `PlayerStaminaPool` immediately when the dash input is accepted.\n"
+    },
+    {
+      "blocked": false,
+      "disciplines": [
+        "Programming/View",
+        "Art/UI"
+      ],
+      "epics": [
+        "UI/HUD"
+      ],
+      "id": "ACT-8J3W",
+      "kind": "action",
+      "landmark": null,
+      "parent": "CARD-4M1P",
+      "path": "Nodes/ACT-8J3W_stamina_bar_ui.md",
+      "priority": "medium",
+      "status": "active",
+      "tags": [
+        "ui"
+      ],
+      "title": "Stamina Bar UI Rendering & Layout",
+      "effectiveStatus": "active",
+      "questPoints": 5,
+      "explicitLandmark": null,
+      "blockedBy": [],
+      "totalQp": 5,
+      "lockedQpPercent": null,
+      "completedAt": null,
+      "createdAt": "2026-09-04T18:08:00Z",
+      "validationError": null,
+      "body": "\n## Action Goal\nRender the stamina bar widget and bind it to `PlayerStaminaPool`, exposing the current and maximum stamina values for HUD display.\n"
+    },
+    {
+      "blocked": false,
+      "disciplines": [
+        "Programming/View",
+        "Art/UI"
+      ],
+      "epics": [
+        "UI/HUD"
+      ],
+      "id": "CARD-4M1P",
+      "kind": "card",
+      "landmark": null,
+      "parent": null,
+      "path": "Nodes/CARD-4M1P_ui_and_hud.md",
+      "priority": "medium",
+      "status": "active",
+      "tags": [
+        "ui",
+        "hud"
+      ],
+      "title": "UI & HUD",
+      "effectiveStatus": "active",
+      "questPoints": null,
+      "explicitLandmark": null,
+      "blockedBy": [],
+      "totalQp": 5,
+      "lockedQpPercent": 0,
+      "completedAt": null,
+      "createdAt": "2026-09-04T18:05:00Z",
+      "validationError": null,
+      "body": "\n## System Context & Architectural Design\nThis card encompasses in-game HUD presentation, stamina bar widgets, and screen-space UI overlays driven by the player controller systems.\n"
+    },
+    {
+      "blocked": true,
+      "disciplines": [
+        "Programming/Locomotion",
+        "Programming/Input"
+      ],
+      "epics": [
+        "Combat_Engine/Locomotion",
+        "Core_Systems/Player"
+      ],
+      "id": "CARD-K9F2",
+      "kind": "card",
+      "landmark": "Landmark_01_Demo",
+      "parent": null,
+      "path": "Nodes/CARD-K9F2_player_controller.md",
+      "priority": "high",
+      "status": "active",
+      "tags": [
+        "player",
+        "locomotion"
+      ],
+      "title": "Player Movement & Controller Core",
+      "effectiveStatus": "blocked",
+      "questPoints": null,
+      "explicitLandmark": "Landmark_01_Demo",
+      "blockedBy": [],
+      "totalQp": 9,
+      "lockedQpPercent": 44.44444444444444,
+      "completedAt": null,
+      "createdAt": "2026-09-04T18:00:00Z",
+      "validationError": null,
+      "body": "\n## System Context & Architectural Design\nThis card encompasses all locomotion mechanics, input buffer handling, and stamina consumption rules for the main player avatar.\n"
+    },
+    {
+      "blocked": true,
+      "disciplines": [
+        "Programming/Optimization",
+        "QualityAssurance"
+      ],
+      "epics": [
+        "Combat_Engine/Locomotion"
+      ],
+      "id": "GRD-7M2Q",
+      "kind": "guard",
+      "landmark": "Landmark_01_Demo",
+      "parent": "CARD-K9F2",
+      "path": "Nodes/GRD-7M2Q_dash_code_review.md",
+      "priority": "medium",
+      "status": "unstarted",
+      "tags": [
+        "qa",
+        "code_review"
+      ],
+      "title": "Code Review: Dash Mechanics & Memory Leaks",
+      "effectiveStatus": "blocked",
+      "questPoints": 1,
+      "explicitLandmark": null,
+      "blockedBy": [
+        "ACT-3X7P"
+      ],
+      "totalQp": 1,
+      "lockedQpPercent": null,
+      "completedAt": null,
+      "createdAt": "2026-09-04T18:15:00Z",
+      "validationError": null,
+      "body": "\n## Quality Check Criteria\n- Verify state machine transition cleanup.\n- Ensure no memory allocations in update loop.\n"
+    },
+    {
+      "blocked": false,
+      "disciplines": [
+        "Programming/Locomotion",
+        "Art/Concept"
+      ],
+      "epics": [
+        "Combat_Engine/Locomotion"
+      ],
+      "id": "IDEA-5T2P",
+      "kind": "idea",
+      "landmark": "Landmark_01_Demo",
+      "parent": "CARD-K9F2",
+      "path": "Nodes/IDEA-5T2P_grappling_hook_mechanic.md",
+      "priority": "low",
+      "status": "unstarted",
+      "tags": [
+        "concept",
+        "pitch"
+      ],
+      "title": "Grappling Hook Physics & Momentum Retention",
+      "effectiveStatus": "unstarted",
+      "questPoints": 5,
+      "explicitLandmark": null,
+      "blockedBy": [],
+      "totalQp": 5,
+      "lockedQpPercent": null,
+      "completedAt": null,
+      "createdAt": "2026-09-05T09:00:00Z",
+      "validationError": null,
+      "body": "\n## Idea Concept & Mechanics Exploration\nInvestigate physics-based cable simulation for momentum-preserving grappling locomotion in air combat.\n"
+    }
+  ]
+}

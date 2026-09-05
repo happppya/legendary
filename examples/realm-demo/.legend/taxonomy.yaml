@@ -1,0 +1,32 @@
+# .legend/taxonomy.yaml
+disciplines:
+  Programming:
+    - Locomotion
+    - Input
+    - Systems
+    - Optimization
+    - View
+  Art:
+    - Concept
+    - 3D_Models
+    - UI
+  QualityAssurance:
+    - Automated
+    - Playtesting
+
+epics:
+  Combat_Engine:
+    - Locomotion
+    - Melee
+    - Abilities
+  Core_Systems:
+    - Player
+    - SaveSystem
+  UI:
+    - HUD
+    - Menus
+
+# Branch aliases map legacy or renamed paths without rewriting markdown files
+aliases:
+  "Programming/Movement": "Programming/Locomotion"
+  "Combat/Melee": "Combat_Engine/Melee"

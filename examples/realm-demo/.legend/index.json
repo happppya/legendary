@@ -1,0 +1,196 @@
+{
+  "generated_at": "2026-09-05T15:14:29Z",
+  "node_count": 6,
+  "nodes": {
+    "ACT-3X7P": {
+      "blocked": true,
+      "blocked_by": [
+        "ACT-8J3W"
+      ],
+      "completed_at": null,
+      "created_at": "2026-09-04T18:10:00Z",
+      "disciplines": [
+        "Programming/Locomotion",
+        "Programming/Systems"
+      ],
+      "effective_status": "blocked",
+      "epics": [
+        "Combat_Engine/Locomotion"
+      ],
+      "explicit_landmark": null,
+      "id": "ACT-3X7P",
+      "kind": "action",
+      "landmark": "Landmark_01_Demo",
+      "locked_qp_percent": null,
+      "parent": "CARD-K9F2",
+      "path": "Nodes/ACT-3X7P_dash_stamina_cost.md",
+      "priority": "high",
+      "quest_points": 3,
+      "status": "active",
+      "tags": [
+        "mechanics"
+      ],
+      "title": "Deduct Stamina on Dash Trigger",
+      "total_qp": 3,
+      "validation_error": null
+    },
+    "ACT-8J3W": {
+      "blocked": false,
+      "blocked_by": [],
+      "completed_at": null,
+      "created_at": "2026-09-04T18:08:00Z",
+      "disciplines": [
+        "Programming/View",
+        "Art/UI"
+      ],
+      "effective_status": "active",
+      "epics": [
+        "UI/HUD"
+      ],
+      "explicit_landmark": null,
+      "id": "ACT-8J3W",
+      "kind": "action",
+      "landmark": null,
+      "locked_qp_percent": null,
+      "parent": "CARD-4M1P",
+      "path": "Nodes/ACT-8J3W_stamina_bar_ui.md",
+      "priority": "medium",
+      "quest_points": 5,
+      "status": "active",
+      "tags": [
+        "ui"
+      ],
+      "title": "Stamina Bar UI Rendering & Layout",
+      "total_qp": 5,
+      "validation_error": null
+    },
+    "CARD-4M1P": {
+      "blocked": false,
+      "blocked_by": [],
+      "completed_at": null,
+      "created_at": "2026-09-04T18:05:00Z",
+      "disciplines": [
+        "Programming/View",
+        "Art/UI"
+      ],
+      "effective_status": "active",
+      "epics": [
+        "UI/HUD"
+      ],
+      "explicit_landmark": null,
+      "id": "CARD-4M1P",
+      "kind": "card",
+      "landmark": null,
+      "locked_qp_percent": 0.0,
+      "parent": null,
+      "path": "Nodes/CARD-4M1P_ui_and_hud.md",
+      "priority": "medium",
+      "quest_points": null,
+      "status": "active",
+      "tags": [
+        "ui",
+        "hud"
+      ],
+      "title": "UI & HUD",
+      "total_qp": 5,
+      "validation_error": null
+    },
+    "CARD-K9F2": {
+      "blocked": true,
+      "blocked_by": [],
+      "completed_at": null,
+      "created_at": "2026-09-04T18:00:00Z",
+      "disciplines": [
+        "Programming/Locomotion",
+        "Programming/Input"
+      ],
+      "effective_status": "blocked",
+      "epics": [
+        "Combat_Engine/Locomotion",
+        "Core_Systems/Player"
+      ],
+      "explicit_landmark": "Landmark_01_Demo",
+      "id": "CARD-K9F2",
+      "kind": "card",
+      "landmark": "Landmark_01_Demo",
+      "locked_qp_percent": 44.44444444444444,
+      "parent": null,
+      "path": "Nodes/CARD-K9F2_player_controller.md",
+      "priority": "high",
+      "quest_points": null,
+      "status": "active",
+      "tags": [
+        "player",
+        "locomotion"
+      ],
+      "title": "Player Movement & Controller Core",
+      "total_qp": 9,
+      "validation_error": null
+    },
+    "GRD-7M2Q": {
+      "blocked": true,
+      "blocked_by": [
+        "ACT-3X7P"
+      ],
+      "completed_at": null,
+      "created_at": "2026-09-04T18:15:00Z",
+      "disciplines": [
+        "Programming/Optimization",
+        "QualityAssurance"
+      ],
+      "effective_status": "blocked",
+      "epics": [
+        "Combat_Engine/Locomotion"
+      ],
+      "explicit_landmark": null,
+      "id": "GRD-7M2Q",
+      "kind": "guard",
+      "landmark": "Landmark_01_Demo",
+      "locked_qp_percent": null,
+      "parent": "CARD-K9F2",
+      "path": "Nodes/GRD-7M2Q_dash_code_review.md",
+      "priority": "medium",
+      "quest_points": 1,
+      "status": "unstarted",
+      "tags": [
+        "qa",
+        "code_review"
+      ],
+      "title": "Code Review: Dash Mechanics & Memory Leaks",
+      "total_qp": 1,
+      "validation_error": null
+    },
+    "IDEA-5T2P": {
+      "blocked": false,
+      "blocked_by": [],
+      "completed_at": null,
+      "created_at": "2026-09-05T09:00:00Z",
+      "disciplines": [
+        "Programming/Locomotion",
+        "Art/Concept"
+      ],
+      "effective_status": "unstarted",
+      "epics": [
+        "Combat_Engine/Locomotion"
+      ],
+      "explicit_landmark": null,
+      "id": "IDEA-5T2P",
+      "kind": "idea",
+      "landmark": "Landmark_01_Demo",
+      "locked_qp_percent": null,
+      "parent": "CARD-K9F2",
+      "path": "Nodes/IDEA-5T2P_grappling_hook_mechanic.md",
+      "priority": "low",
+      "quest_points": 5,
+      "status": "unstarted",
+      "tags": [
+        "concept",
+        "pitch"
+      ],
+      "title": "Grappling Hook Physics & Momentum Retention",
+      "total_qp": 5,
+      "validation_error": null
+    }
+  },
+  "schema_version": 1
+}

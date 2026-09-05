@@ -32,6 +32,7 @@
   --inset: #0a0e15;
 
   /* Hairlines */
+  --line-0: #1b2432;
   --line-1: #232d3f;
   --line-2: #34425d;
 
@@ -100,9 +101,39 @@
   --code-bg: #0a0e15;
   --code-line: #263142;
 
-  /* Header chrome */
+  /* Titlebar chrome */
   --header-bg: #10151e;
   --header-line: #232d3f;
+  --titlebar-bg: #0b0f16;
+  --titlebar-line: #1d2634;
+
+  /* Command palette pill */
+  --palette-bg: #10141d;
+  --palette-bg-hover: #161c28;
+  --palette-fg: #7d8796;
+
+  /* Logomark */
+  --mark-line: #49556a;
+  --mark-accent: #e0a95c;
+  --mark-node: #e8eaee;
+
+  /* Status bar */
+  --status-bg: #0c1017;
+
+  /* Graph canvas */
+  --graph-bg: #0b0f16;
+  --graph-canvas: #0a0e14;
+  --graph-grid: rgba(148, 166, 198, 0.06);
+  --graph-line: #45536e;
+  --graph-optional: #84795f;
+  --graph-card-fill: #141c29;
+  --graph-pill-fill: #12203a;
+  --graph-guard-fill: #251a15;
+  --graph-idea-fill: #232017;
+
+  /* Destructive hover wash */
+  --danger-soft-bg: rgba(235, 101, 88, 0.16);
+  --danger-soft-fg: #f19387;
 
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.25), 0 4px 14px rgba(0, 0, 0, 0.18);
 }
@@ -116,6 +147,7 @@
   --bg-3: #dbe1ea;
   --inset: #e1e6ee;
 
+  --line-0: #e0e6ec;
   --line-1: #d5dbe4;
   --line-2: #b6c0cd;
 
@@ -172,6 +204,31 @@
 
   --header-bg: #e6eaf0;
   --header-line: #d3dae3;
+  --titlebar-bg: #e0e5ec;
+  --titlebar-line: #cdd5df;
+
+  --palette-bg: #fbfcfe;
+  --palette-bg-hover: #ffffff;
+  --palette-fg: #66707e;
+
+  --mark-line: #a8b2c0;
+  --mark-accent: #b57f2a;
+  --mark-node: #2a303a;
+
+  --status-bg: #e2e7ee;
+
+  --graph-bg: #e9edf2;
+  --graph-canvas: #e4e9ef;
+  --graph-grid: rgba(60, 76, 102, 0.09);
+  --graph-line: #8d9bb0;
+  --graph-optional: #8d846c;
+  --graph-card-fill: #ffffff;
+  --graph-pill-fill: #dfe9f6;
+  --graph-guard-fill: #f7e6de;
+  --graph-idea-fill: #f0ede4;
+
+  --danger-soft-bg: rgba(214, 79, 60, 0.12);
+  --danger-soft-fg: #b54230;
 
   --shadow-1: 0 1px 2px rgba(28, 34, 46, 0.08), 0 6px 18px rgba(28, 34, 46, 0.08);
 }
