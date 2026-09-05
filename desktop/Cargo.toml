@@ -1,0 +1,19 @@
+[package]
+name = "legendary-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Legendary desktop shell (Tauri v2) — wraps legend_core + the Vue renderer."
+
+[lib]
+name = "legendary_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { workspace = true }
+
+[dependencies]
+tauri = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+legend_core = { path = "../crates/legend_core" }

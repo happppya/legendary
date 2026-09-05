@@ -1,0 +1,14 @@
+[package]
+name = "legend_core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared Rust engine for Legendary: ECS node model, frontmatter, DAG rules, registries, realm indexing."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+chrono = { workspace = true }
+fastrand = { workspace = true }
+thiserror = { workspace = true }

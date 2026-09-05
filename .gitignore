@@ -1,0 +1,12 @@
+# Rust
+/target
+Cargo.lock.bak
+
+# Frontend
+frontend/node_modules
+frontend/dist
+
+# OS cruft
+.DS_Store
+Thumbs.db
+*.log

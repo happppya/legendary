@@ -1,0 +1,16 @@
+[package]
+name = "legend_cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The `legend` command line interface (agent & terminal queries over a Legendary realm)."
+
+[[bin]]
+name = "legend"
+path = "src/main.rs"
+
+[dependencies]
+legend_core = { path = "../legend_core" }
+clap = { workspace = true }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
