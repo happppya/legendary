@@ -1,0 +1,303 @@
+/*
+ * Legendary renderer - global design tokens and base styles.
+ *
+ * Design read: a local-first realm instrument for game developers, not a
+ * marketing page. The layout is a two-pane instrument (node index + detail
+ * sheet), so the tokens below carry the whole visual language:
+ *
+ *   - Dual theme: "night" (ink-navy) and "map" (cool paper), switched via
+ *     <html data-theme>. Both themes share the same semantic token names;
+ *     components never hardcode hex.
+ *   - One brand accent (gold) used for selection, focus, primary action and
+ *     QP values. Status colors are semantic and stay consistent everywhere.
+ *   - Type: IBM Plex Sans (body/UI) + IBM Plex Mono (identifiers, counts,
+ *     paths). Self-hosted via @fontsource, no runtime font fetch.
+ *   - Shape lock: 4px chips/badges, 6px controls/code, 999px pills.
+ *   - Motion: none by default; only micro transitions on transform/opacity.
+ *     prefers-reduced-motion collapses everything to instant.
+ *
+ * These tokens are the ONLY place hex values live. Scoped component styles
+ * reference var(--*) so both themes stay in sync by construction.
+ */
+
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Surfaces: bg-0 app, bg-1 panel, bg-2 raised/hover, bg-3 pressed */
+  --bg-0: #0e1219;
+  --bg-1: #131a24;
+  --bg-2: #1b2331;
+  --bg-3: #232d3f;
+  --inset: #0a0e15;
+
+  /* Hairlines */
+  --line-1: #232d3f;
+  --line-2: #34425d;
+
+  /* Text ramp: t1 primary, t2 secondary, t3 tertiary, faint decorative */
+  --text-1: #e9ecf1;
+  --text-2: #aab2c0;
+  --text-3: #8b94a3;
+  --faint: #80899a;
+
+  /* Brand accent - gold. Selection, focus ring, primary CTA, QP values. */
+  --gold: #e0a95c;
+  --gold-strong: #eab96e;
+  --gold-deep: #b07f34;
+  --on-gold: #1a1206;
+
+  /* Radii (shape lock) */
+  --r-s: 4px;
+  --r-m: 6px;
+  --r-l: 10px;
+
+  /* Row selection wash for gold-tinted nav rows */
+  --sel-bg: rgba(224, 169, 92, 0.13);
+
+  /* Semantic status chips - dark theme */
+  --chip-active-fg: #8fd3a0;
+  --chip-active-bg: #142219;
+  --chip-active-line: #2e4a37;
+  --chip-blocked-fg: #f09a87;
+  --chip-blocked-bg: #2a1a15;
+  --chip-blocked-line: #5a2f21;
+  --chip-done-fg: #9aa3b1;
+  --chip-done-bg: #1b1f27;
+  --chip-done-line: #39404b;
+  --chip-unstarted-fg: #c2cad6;
+  --chip-unstarted-bg: #1b2330;
+  --chip-unstarted-line: #36435a;
+
+  /* Status dots (semantic, non-text) */
+  --dot-active: #69c98a;
+  --dot-blocked: #ee856c;
+  --dot-unstarted: #8fa0b8;
+  --dot-done: #66748a;
+
+  /* Kind tiles (node kind color coding, both themes share the mid tones) */
+  --kind-card: #d99b45;
+  --kind-action: #5d93d0;
+  --kind-guard: #cf6d4f;
+  --kind-idea: #c2bcaf;
+  --badge-ink: #14181f;
+
+  /* Buttons */
+  --btn-primary-bg: #cf9d51;
+  --btn-primary-hover: #dbaa60;
+  --btn-primary-fg: #1b1306;
+
+  /* Feedback surfaces */
+  --err-bg: #291612;
+  --err-line: #512a20;
+  --err-fg: #f2a28c;
+  --note-bg: #141d2b;
+  --note-line: #2a3a54;
+  --note-fg: #a9bedc;
+  --warn-fg: #e7bc7a;
+
+  /* Code blocks */
+  --code-bg: #0a0e15;
+  --code-line: #263142;
+
+  /* Header chrome */
+  --header-bg: #10151e;
+  --header-line: #232d3f;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.25), 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg-0: #eef1f5;
+  --bg-1: #f5f7fa;
+  --bg-2: #e4e8ef;
+  --bg-3: #dbe1ea;
+  --inset: #e1e6ee;
+
+  --line-1: #d5dbe4;
+  --line-2: #b6c0cd;
+
+  --text-1: #21262f;
+  --text-2: #3f4857;
+  --text-3: #59626f;
+  --faint: #5c6574;
+
+  --gold: #8f6216;
+  --gold-strong: #7a5210;
+  --gold-deep: #6b480f;
+  --on-gold: #fdf9ef;
+
+  --sel-bg: rgba(143, 98, 22, 0.11);
+
+  --chip-active-fg: #1d6b33;
+  --chip-active-bg: #e1f2e4;
+  --chip-active-line: #b5dabd;
+  --chip-blocked-fg: #9c371c;
+  --chip-blocked-bg: #fae6e0;
+  --chip-blocked-line: #e9bfb1;
+  --chip-done-fg: #57616f;
+  --chip-done-bg: #e4e7ec;
+  --chip-done-line: #c4cad4;
+  --chip-unstarted-fg: #35404f;
+  --chip-unstarted-bg: #e5e9f0;
+  --chip-unstarted-line: #c4ccd9;
+
+  --dot-active: #2f9d50;
+  --dot-blocked: #d2541f;
+  --dot-unstarted: #64748b;
+  --dot-done: #98a2b1;
+
+  --kind-card: #cf9337;
+  --kind-action: #4a84c4;
+  --kind-guard: #bd5f42;
+  --kind-idea: #a49d8f;
+  --badge-ink: #16181d;
+
+  --btn-primary-bg: #8f6216;
+  --btn-primary-hover: #a06f1c;
+  --btn-primary-fg: #fdf9ef;
+
+  --err-bg: #fae6e0;
+  --err-line: #e5b5a4;
+  --err-fg: #9c371c;
+  --note-bg: #e3e9f2;
+  --note-line: #c6d2e2;
+  --note-fg: #2c4a73;
+  --warn-fg: #7a5210;
+
+  --code-bg: #e1e6ee;
+  --code-line: #ccd3dd;
+
+  --header-bg: #e6eaf0;
+  --header-line: #d3dae3;
+
+  --shadow-1: 0 1px 2px rgba(28, 34, 46, 0.08), 0 6px 18px rgba(28, 34, 46, 0.08);
+}
+
+/* ---- base ------------------------------------------------------------- */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg-0);
+  color: var(--text-1);
+  font-family: 'IBM Plex Sans Variable', 'IBM Plex Sans', system-ui, -apple-system,
+    'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#app {
+  height: 100%;
+}
+
+code,
+kbd,
+pre,
+.mono {
+  font-family: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas,
+    monospace;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--gold);
+}
+
+::selection {
+  background: rgba(224, 169, 92, 0.32);
+  color: inherit;
+}
+
+:root[data-theme='light'] ::selection {
+  background: rgba(143, 98, 22, 0.22);
+}
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+/* Thin, quiet scrollbars that match the active theme */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 6px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--faint);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Hidden but still read by assistive tech */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
