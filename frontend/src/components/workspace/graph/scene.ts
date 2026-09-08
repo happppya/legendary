@@ -2,6 +2,14 @@
 // pseudo-random seeding, and the "auto-layout scatter" used to restart the
 // force simulator. Pure geometry — no Vue state here (GraphPane owns the
 // `live` ref and the rAF loop).
+//
+// Three graph scopes drive which nodes a scene holds (test-feedback A-1):
+// - `local`:  the selected node's neighbourhood (mock: curated spots;
+//             realm: focused subgraph re-centred on the selection).
+// - `global`: every node in the realm (Feature A-a).
+// - `overview`: Realm Origin → genre roots, recursing only through genre
+//             nodes and terminating at the first non-genre descendant
+//             (Feature A-b).
 
 import type { NodeView } from '../../../types'
 import { MOCK_BY_KEY, SCENE_HEIGHT, SCENE_SPOTS, SCENE_WIDTH } from '../../../lib/mockRealm'
@@ -9,6 +17,7 @@ import { MOCK_BY_KEY, SCENE_HEIGHT, SCENE_SPOTS, SCENE_WIDTH } from '../../../li
 /** Sizes per kind (centred at x,y). */
 export const KIND_SIZE: Record<string, { w: number; h: number }> = {
   card: { w: 190, h: 56 },
+  genre: { w: 190, h: 56 },
   action: { w: 172, h: 30 },
   idea: { w: 172, h: 30 },
   guard: { w: 46, h: 46 },
@@ -17,6 +26,9 @@ export const KIND_SIZE: Record<string, { w: number; h: number }> = {
 /** Whole-realm scenes above this node count wait for the Wasm physics
  * engine (doc 07 / Milestone 5) instead of the prototype simulator. */
 export const MAX_SCENE_NODES = 200
+
+/** Graph scope: local neighbourhood, whole realm, or genre overview. */
+export type GraphScope = 'local' | 'global' | 'overview'
 
 /** Node metadata + live physics state, keyed by scene spot key. */
 export interface SceneItem {
@@ -61,47 +73,79 @@ function scatterPosition(key: string, index: number, total: number) {
 export interface SceneSource {
   isMockScene: boolean
   nodesById: Map<string, NodeView>
+  /** Selected node id (drives the local scope's centre). */
+  selectedId: string | null
+  scope: GraphScope
 }
 
-/** Fresh scene items: the curated mock layout, or a force-laid ring over
- * the whole realm (seedN-driven so a re-seed settles identically). */
-export function buildSceneItems(src: SceneSource): SceneItem[] {
-  const out: SceneItem[] = []
-  if (src.isMockScene) {
-    // Curated local scene around Character Movement Core.
-    for (const spot of SCENE_SPOTS) {
-      const id = MOCK_BY_KEY.get(spot.key)?.id ?? spot.key
-      const node = src.nodesById.get(id)
-      if (!node) continue
-      const size = KIND_SIZE[node.kind] ?? KIND_SIZE.action
-      // deterministic tiny jitter so the first auto-layout visibly settles
-      const jitter = (seedN(spot.key) - 0.5) * 14
-      out.push({
-        key: spot.key,
-        node,
-        x: spot.x,
-        y: spot.y + jitter,
-        w: size.w,
-        h: size.h,
-        vx: (seedN(spot.key + 'x') - 0.5) * 1.6,
-        vy: (seedN(spot.key + 'y') - 0.5) * 1.6,
-      })
+/** Ids held by a scope: everything (global), the genre overview frontier,
+ * or the local neighbourhood around the selection. */
+export function scopeIds(src: SceneSource): Set<string> | null {
+  const byId = src.nodesById
+  if (src.scope === 'global') return null // null = all nodes
+  if (src.scope === 'overview') {
+    // Realm Origin → every top-level node; recurse only through genre
+    // nodes. The scene shows genres plus their immediate non-genre children
+    // (the frontier), wherever those children sit in the tree.
+    const out = new Set<string>()
+    const roots = [...byId.values()].filter((n) => n.parent === null)
+    const walk = (id: string) => {
+      for (const n of byId.values()) {
+        if (n.parent !== id) continue
+        out.add(n.id)
+        if (n.kind === 'genre') walk(n.id)
+      }
+    }
+    for (const r of roots) {
+      out.add(r.id)
+      if (r.kind === 'genre') walk(r.id)
     }
     return out
   }
-  // Real realm: force-lay the whole realm tree, seeded on a ring so the
-  // simulator visibly settles into the dependency structure.
-  const size = src.nodesById.size
+  // local: the selection plus its ancestors, siblings and direct children
+  // (empty → fall back to the whole realm so the canvas is never blank).
+  const focus = src.selectedId ? byId.get(src.selectedId) : null
+  if (!focus) return null
+  const out = new Set<string>([focus.id])
+  for (const n of byId.values()) {
+    if (n.parent === focus.id) out.add(n.id)
+    if (focus.parent && n.id === focus.parent) out.add(n.id)
+    if (n.parent && focus.parent && n.parent === focus.parent) out.add(n.id)
+  }
+  return out.size > 1 ? out : null
+}
+
+/** Fresh scene items for the scope: the local mock scope seeds members onto
+ * their curated demo spots (when they have one), everything else is a
+ * force-laid ring over the scope's members. */
+export function buildSceneItems(src: SceneSource): SceneItem[] {
+  const out: SceneItem[] = []
+  const keep = scopeIds(src)
+  const members = keep
+    ? [...src.nodesById.values()].filter((n) => keep.has(n.id))
+    : [...src.nodesById.values()]
+  const size = members.length
   if (size === 0 || size > MAX_SCENE_NODES) return out
+  // Reverse lookup: mock node id → curated spot key (demo scene only).
+  const spotById = new Map<string, string>()
+  if (src.isMockScene) {
+    for (const [key, node] of MOCK_BY_KEY) {
+      if (SCENE_SPOTS.some((s) => s.key === key)) spotById.set(node.id, key)
+    }
+  }
   let i = 0
-  for (const node of src.nodesById.values()) {
+  for (const node of members) {
     const dim = KIND_SIZE[node.kind] ?? KIND_SIZE.action
+    const spotKey = spotById.get(node.id)
+    const spot = spotKey ? SCENE_SPOTS.find((s) => s.key === spotKey) : undefined
     const p = scatterPosition(node.id, i, size)
+    // deterministic tiny jitter so the first auto-layout visibly settles
+    const jitter = (seedN(spotKey ?? node.id) - 0.5) * 14
     out.push({
       key: node.id,
       node,
-      x: p.x,
-      y: p.y,
+      x: spot ? spot.x : p.x,
+      y: spot ? spot.y + jitter : p.y,
       w: dim.w,
       h: dim.h,
       vx: p.vx,
@@ -113,13 +157,16 @@ export function buildSceneItems(src: SceneSource): SceneItem[] {
 }
 
 /** Scene signature — re-seed only when the member set really changes (realm
- * open/reload, or the mock/local scene swaps). Dragging and auto-layout do
- * not touch it, so a settled layout survives navigation. */
+ * open/reload, scope swap, or a local-scope selection change that reshapes
+ * the neighbourhood). Dragging and auto-layout do not touch it, so a
+ * settled layout survives navigation. */
 export function sceneSignature(src: SceneSource): string {
-  if (src.isMockScene) {
-    return 'm|' + SCENE_SPOTS.map((s) => s.key).sort().join('|')
-  }
-  return 'r|' + [...src.nodesById.keys()].sort().join('|')
+  const focus = src.scope === 'local' ? (src.selectedId ?? '') : ''
+  const keep = scopeIds(src)
+  const ids = keep
+    ? [...src.nodesById.keys()].filter((id) => keep.has(id)).sort()
+    : [...src.nodesById.keys()].sort()
+  return `${src.scope[0]}|${focus}|${ids.join('|')}`
 }
 
 /** Scatter every item onto a ring and re-kick its velocity; the simulator

@@ -2,11 +2,11 @@
 
 ### 6.1. Manifest & Index Pattern
 
-- [ ] **Central Taxonomy & Landmarks (`.legend/taxonomy.yaml` & `.legend/landmarks.yaml`):** Provides AI agents with declarative registries of valid Disciplines, Epics, and Landmarks.
+- [x] **Central Taxonomy & Landmarks (`.legend/taxonomy.yaml` & `.legend/landmarks.yaml`):** Provides AI agents with declarative registries of valid Disciplines, Epics, and Landmarks.
 
-- [ ] **Auto-Generated Index (`.legend/index.json`):** On every save, UI edit, or CLI write mutation, the system **synchronously updates** a JSON document containing all node metadata, effective landmarks, dynamic computed blocked states, and relative paths.
+- [x] **Auto-Generated Index (`.legend/index.json`):** On every save, UI edit, or CLI write mutation, the system **synchronously updates** a JSON document containing all node metadata, effective landmarks, dynamic computed blocked states, and relative paths.
 
-- [ ] **Agent Readme (`.legend/INDEX.md`):** Human- and agent-readable Markdown table listing active Actions, blocked Guards, speculative Ideas, and high-level Cards, updated synchronously alongside `index.json`.
+- [x] **Agent Readme (`.legend/INDEX.md`):** Human- and agent-readable Markdown table listing active Actions, blocked Guards, speculative Ideas, and high-level Cards, updated synchronously alongside `index.json`.
 
 ### 6.2. Flat Directory Advantages for Agents
 

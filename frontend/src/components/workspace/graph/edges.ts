@@ -4,7 +4,7 @@
 // a scene + edge defs into SVG lines with per-edge style markers.
 
 import type { NodeView } from '../../../types'
-import { SCENE_LINKS } from '../../../lib/mockRealm'
+import { MOCK_BY_KEY, SCENE_LINKS } from '../../../lib/mockRealm'
 import type { SceneItem } from './scene'
 
 export interface SceneLinkDef {
@@ -15,16 +15,34 @@ export interface SceneLinkDef {
   dep?: boolean
 }
 
+/** Edges restricted to the nodes currently on the scene. `byKey` holds the
+ * scene members (spot keys on the mock, node ids elsewhere). */
 export function sceneEdges(
   isMockScene: boolean,
   nodesById: Map<string, NodeView>,
+  byKey?: Map<string, unknown>,
 ): SceneLinkDef[] {
-  if (isMockScene) return SCENE_LINKS
+  if (isMockScene) {
+    if (!byKey) return SCENE_LINKS
+    return SCENE_LINKS.filter((l) => byKey.has(l.from) && byKey.has(l.to))
+  }
+  const present = byKey ?? nodesById
+  const keyOf = (id: string): string | null => {
+    if (present.has(id)) return id
+    if (byKey && MOCK_BY_KEY.size) {
+      for (const [k, n] of MOCK_BY_KEY) if (n.id === id && byKey.has(k)) return k
+    }
+    return null
+  }
   const out: SceneLinkDef[] = []
   for (const [id, node] of nodesById) {
-    if (node.parent && nodesById.has(node.parent)) out.push({ from: node.parent, to: id })
+    const to = keyOf(id)
+    if (!to) continue
+    const from = node.parent ? keyOf(node.parent) : null
+    if (from) out.push({ from, to })
     for (const b of node.blockedBy) {
-      if (nodesById.has(b)) out.push({ from: b, to: id, dep: true })
+      const dep = keyOf(b)
+      if (dep) out.push({ from: dep, to, dep: true })
     }
   }
   return out

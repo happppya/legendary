@@ -10,7 +10,7 @@ disciplines:
 epics:
   - UI/HUD
 landmark: null
-parent: null
+parent: GENRE-3Z8N
 blocked_by: []
 created_at: 2026-09-04T18:05:00Z
 completed_at: null

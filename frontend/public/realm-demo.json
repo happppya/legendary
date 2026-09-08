@@ -1,7 +1,7 @@
 {
   "root": "examples/realm-demo",
-  "generatedAt": "2026-09-05T15:14:29Z",
-  "nodeCount": 6,
+  "generatedAt": "2026-09-08T22:52:46Z",
+  "nodeCount": 7,
   "warnings": [],
   "nodes": [
     {
@@ -80,7 +80,7 @@
       "id": "CARD-4M1P",
       "kind": "card",
       "landmark": null,
-      "parent": null,
+      "parent": "GENRE-3Z8N",
       "path": "Nodes/CARD-4M1P_ui_and_hud.md",
       "priority": "medium",
       "status": "active",
@@ -113,7 +113,7 @@
       "id": "CARD-K9F2",
       "kind": "card",
       "landmark": "Landmark_01_Demo",
-      "parent": null,
+      "parent": "GENRE-3Z8N",
       "path": "Nodes/CARD-K9F2_player_controller.md",
       "priority": "high",
       "status": "active",
@@ -132,6 +132,33 @@
       "createdAt": "2026-09-04T18:00:00Z",
       "validationError": null,
       "body": "\n## System Context & Architectural Design\nThis card encompasses all locomotion mechanics, input buffer handling, and stamina consumption rules for the main player avatar.\n"
+    },
+    {
+      "blocked": true,
+      "disciplines": [],
+      "epics": [],
+      "id": "GENRE-3Z8N",
+      "kind": "genre",
+      "landmark": null,
+      "parent": null,
+      "path": "Nodes/GENRE-3Z8N_player_systems.md",
+      "priority": "medium",
+      "status": "active",
+      "tags": [
+        "genre",
+        "player"
+      ],
+      "title": "Player Systems",
+      "effectiveStatus": "blocked",
+      "questPoints": null,
+      "explicitLandmark": null,
+      "blockedBy": [],
+      "totalQp": 14,
+      "lockedQpPercent": 28.571428571428573,
+      "completedAt": null,
+      "createdAt": "2026-09-04T18:20:00Z",
+      "validationError": null,
+      "body": "\n## Genre Scope\nBroad categorization branch grouping the player-facing root systems: the\nmovement & controller core and the UI & HUD presentation layer.\n"
     },
     {
       "blocked": true,

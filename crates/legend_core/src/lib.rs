@@ -10,11 +10,13 @@ pub mod dag;
 pub mod frontmatter;
 pub mod id;
 pub mod model;
+pub mod ops;
 pub mod realm;
 pub mod registry;
 pub mod scaffold;
 
 pub use frontmatter::FrontmatterError;
 pub use model::{Node, NodeFile, NodeKind, Priority, Status};
+pub use ops::{MutationOutcome, OpsError};
 pub use realm::{NodeComputed, Realm, RealmError};
 pub use registry::{LandmarkRegistry, Taxonomy};

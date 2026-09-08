@@ -6,7 +6,7 @@
 import { computed } from 'vue'
 import { PhPlus } from '@phosphor-icons/vue'
 import type { NodeView } from '../../types'
-import { KIND_ICON, KIND_LABEL } from '../../lib/kind'
+import { KIND_ICON, KIND_LABEL, isContainerKind } from '../../lib/kind'
 import { STATUSES } from '../../lib/status'
 import { qpOf } from '../../lib/node'
 
@@ -62,7 +62,7 @@ function cardTitle(n: NodeView): string {
               </span>
             </span>
             <span class="card-foot">
-              <span v-if="qpOf(n) !== null" class="qp mono" :title="n.kind === 'card' ? 'aggregate QP' : 'quest points'">
+              <span v-if="qpOf(n) !== null" class="qp mono" :title="isContainerKind(n.kind) ? 'aggregate QP' : 'quest points'">
                 {{ qpOf(n) }} QP
               </span>
               <span v-if="n.blocked" class="bmark" title="Blocked by an unfinished prerequisite">blocked</span>
@@ -221,6 +221,10 @@ function cardTitle(n: NodeView): string {
 
 .kind-tile.card {
   background: var(--kind-card);
+}
+
+.kind-tile.genre {
+  background: var(--kind-genre);
 }
 
 .kind-tile.action {

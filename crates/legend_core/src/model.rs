@@ -4,12 +4,14 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-/// Node entity types. `Card` is the structural group node; `Action`, `Guard`
-/// and `Idea` are the executable/quality-gate/speculative leaf kinds.
+/// Node entity types. `Card` is the structural group node, `Genre` the
+/// broader categorization container; `Action`, `Guard` and `Idea` are the
+/// executable/quality-gate/speculative leaf kinds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum NodeKind {
     Card,
+    Genre,
     Action,
     Guard,
     Idea,
@@ -20,6 +22,7 @@ impl NodeKind {
     pub fn prefix(self) -> &'static str {
         match self {
             NodeKind::Card => "CARD",
+            NodeKind::Genre => "GENRE",
             NodeKind::Action => "ACT",
             NodeKind::Guard => "GRD",
             NodeKind::Idea => "IDEA",
@@ -29,6 +32,7 @@ impl NodeKind {
     pub fn from_prefix(s: &str) -> Option<Self> {
         match s {
             "CARD" => Some(NodeKind::Card),
+            "GENRE" => Some(NodeKind::Genre),
             "ACT" => Some(NodeKind::Action),
             "GRD" => Some(NodeKind::Guard),
             "IDEA" => Some(NodeKind::Idea),
@@ -39,6 +43,7 @@ impl NodeKind {
     pub fn label(self) -> &'static str {
         match self {
             NodeKind::Card => "Card",
+            NodeKind::Genre => "Genre",
             NodeKind::Action => "Action",
             NodeKind::Guard => "Guard",
             NodeKind::Idea => "Idea",
@@ -47,7 +52,13 @@ impl NodeKind {
 
     /// True for the non-container leaf kinds (Action/Guard/Idea).
     pub fn is_leaf_kind(self) -> bool {
-        !matches!(self, NodeKind::Card)
+        matches!(self, NodeKind::Action | NodeKind::Guard | NodeKind::Idea)
+    }
+
+    /// True for the structural containers (Card/Genre). Containers aggregate
+    /// descendant QP, inherit status from children, and can hold subgraphs.
+    pub fn is_container(self) -> bool {
+        matches!(self, NodeKind::Card | NodeKind::Genre)
     }
 }
 
@@ -55,6 +66,7 @@ impl fmt::Display for NodeKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
             NodeKind::Card => "card",
+            NodeKind::Genre => "genre",
             NodeKind::Action => "action",
             NodeKind::Guard => "guard",
             NodeKind::Idea => "idea",
@@ -68,11 +80,12 @@ impl std::str::FromStr for NodeKind {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_ascii_lowercase().as_str() {
             "card" => Ok(NodeKind::Card),
+            "genre" => Ok(NodeKind::Genre),
             "action" => Ok(NodeKind::Action),
             "guard" => Ok(NodeKind::Guard),
             "idea" => Ok(NodeKind::Idea),
             other => Err(format!(
-                "unknown node kind `{other}` (expected card, action, guard or idea)"
+                "unknown node kind `{other}` (expected card, genre, action, guard or idea)"
             )),
         }
     }
@@ -224,6 +237,7 @@ mod tests {
     fn kind_parsing_roundtrip() {
         for k in [
             NodeKind::Card,
+            NodeKind::Genre,
             NodeKind::Action,
             NodeKind::Guard,
             NodeKind::Idea,

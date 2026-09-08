@@ -170,6 +170,12 @@ locomotion in air combat.
     for sample in [card, action, guard, idea] {
         assert_lossless(&sample);
     }
+    let genre = canonical_file(
+        "---\nid: GENRE-3Z8N\nkind: genre\ntitle: Player Systems\nstatus: active\npriority: medium\ndisciplines: []\nepics: []\nquest_points: null\nlandmark: null\nparent: null\nblocked_by: []\ncreated_at: 2026-09-04T18:20:00Z\ncompleted_at: null\ntags:\n  - genre\n---\n\n## Genre Scope\nBroad categorization branch grouping whole system families.\n",
+    );
+    for sample in [genre] {
+        assert_lossless(&sample);
+    }
 }
 
 /// Deterministic xorshift32 PRNG so failures are reproducible.
@@ -209,6 +215,7 @@ fn randomized_nodes_roundtrip_losslessly() {
     let mut rng = Rng(0x5EED_CAFE);
     let kinds = [
         NodeKind::Card,
+        NodeKind::Genre,
         NodeKind::Action,
         NodeKind::Guard,
         NodeKind::Idea,
@@ -220,7 +227,7 @@ fn randomized_nodes_roundtrip_losslessly() {
         Priority::Medium,
         Priority::Low,
     ];
-    let prefixes = ["CARD", "ACT", "GRD", "IDEA"];
+    let prefixes = ["CARD", "GENRE", "ACT", "GRD", "IDEA"];
 
     for i in 0..400 {
         let mut node = Node {
@@ -257,8 +264,8 @@ fn randomized_nodes_roundtrip_losslessly() {
             completed_at: None,
             tags: (0..rng.below(4)).map(|_| rng.text(12)).collect(),
         };
-        if node.kind == NodeKind::Card {
-            node.quest_points = None; // cards aggregate, never estimate directly
+        if node.kind.is_container() {
+            node.quest_points = None; // containers aggregate, never estimate directly
         }
         let file = NodeFile {
             node,

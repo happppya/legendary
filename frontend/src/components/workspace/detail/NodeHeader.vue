@@ -55,6 +55,10 @@ defineProps<{ node: NodeView }>()
   background: var(--kind-card);
 }
 
+.kind-tile.genre {
+  background: var(--kind-genre);
+}
+
 .kind-tile.action {
   background: var(--kind-action);
 }

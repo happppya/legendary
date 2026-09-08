@@ -17,7 +17,7 @@ import {
 import type { NodeView } from '../../types'
 import type { CheckRow, FilterModel } from '../../lib/filters'
 import { matchesFilters } from '../../lib/filters'
-import { KIND_ICON, KIND_LABEL, KIND_RANK } from '../../lib/kind'
+import { KIND_ICON, KIND_LABEL, KIND_RANK, isContainerKind } from '../../lib/kind'
 import { STATUS_KEYS, STATUS_LABEL, STATUS_RANK } from '../../lib/status'
 import { PRIORITY_LABEL, PRIORITY_RANK } from '../../lib/priority'
 import { qpOf } from '../../lib/node'
@@ -289,7 +289,7 @@ function rowClass(n: NodeView): string {
               </span>
             </td>
             <td class="col-qp mono">
-              <span v-if="n.kind === 'card' && n.totalQp > 0" class="qp-val" :title="`${n.totalQp} QP aggregate`">
+              <span v-if="isContainerKind(n.kind) && n.totalQp > 0" class="qp-val" :title="`${n.totalQp} QP aggregate`">
                 {{ n.totalQp }}
               </span>
               <span v-else-if="n.questPoints !== null" class="qp-val">{{ n.questPoints }}</span>
@@ -708,6 +708,10 @@ tr.done .t-title {
 
 .kind-tile.card {
   background: var(--kind-card);
+}
+
+.kind-tile.genre {
+  background: var(--kind-genre);
 }
 
 .kind-tile.action {

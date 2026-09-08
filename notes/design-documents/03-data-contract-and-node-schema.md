@@ -82,21 +82,21 @@ aliases:
   "Vertical_Slice": "Landmark_02_Slice"
 ```
 
-- [ ] **Validation & Auto-Completion:** Frontmatter fields for `disciplines`, `epics`, and `landmark` are validated against these registries. UI and CLI inputs auto-complete using these trees.
+- [x] **Validation & Auto-Completion:** Frontmatter fields for `disciplines`, `epics`, and `landmark` are validated against these registries. UI and CLI inputs auto-complete using these trees.
 
-- [ ] **Alias Resolution:** If an alias is mapped, queries or frontmatter using legacy strings resolve transparently to the canonical target without triggering mass search-and-replace edits across Markdown files.
+- [x] **Alias Resolution:** If an alias is mapped, queries or frontmatter using legacy strings resolve transparently to the canonical target without triggering mass search-and-replace edits across Markdown files.
 
 ### 3.3. Node ID System, Base36 Hash Strategy & Slug Stability
 
-- [ ] **Randomized Base36 Allocation:** Node IDs are generated as randomized 4-character Base36 hash strings (`0-9`, `A-Z`).
+- [x] **Randomized Base36 Allocation:** Node IDs are generated as randomized 4-character Base36 hash strings (`0-9`, `A-Z`).
 
-- [ ] **Format:** `[KIND_PREFIX]-[RANDOM_BASE36_4]` (e.g., `CARD-K9F2`, `ACT-3X7P`, `GRD-7M2Q`, `IDEA-5T2P`).
+- [x] **Format:** `[KIND_PREFIX]-[RANDOM_BASE36_4]` (e.g., `CARD-K9F2`, `ACT-3X7P`, `GRD-7M2Q`, `IDEA-5T2P`).
 
-- [ ] **Collision Resistance:** A 4-character Base36 string yields $36^4 = 1,679,616$ unique combinations per node prefix. If a collision occurs during creation, the system re-rolls or scales the ID length (`ACT-3X7PA`).
+- [x] **Collision Resistance:** A 4-character Base36 string yields $36^4 = 1,679,616$ unique combinations per node prefix. If a collision occurs during creation, the system re-rolls or scales the ID length (`ACT-3X7PA`).
 
 - [ ] **Node ID Immutability & File Slug Stability:**
 
-    - [ ] The Node ID (`ACT-3X7P`) is the **immutable primary key** across all links, dependency arrays, and filesystem indexes.
+    - [x] The Node ID (`ACT-3X7P`) is the **immutable primary key** across all links, dependency arrays, and filesystem indexes.
 
     - [x] Filename title slugs (e.g., `Nodes/ACT-3X7P_dash_stamina_cost.md`) are generated upon creation and **remain fixed**. Editing a title updates the `title` frontmatter key and markdown content without renaming the file on disk. File renames occur **ONLY upon explicit user/agent request** (`legend rename [ID]`).
 

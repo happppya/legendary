@@ -152,16 +152,17 @@ impl Realm {
         Ok(realm)
     }
 
-    /// Ids sorted for stable output: Cards first, then Actions, Guards, Ideas;
-    /// alphabetical within a kind.
+    /// Ids sorted for stable output: Genres first, then Cards, Actions,
+    /// Guards, Ideas; alphabetical within a kind.
     pub fn sorted_ids(&self) -> Vec<String> {
         let mut ids: Vec<&String> = self.nodes.keys().collect();
         let rank = |id: &&String| match self.nodes.get(*id).map(|f| f.node.kind) {
             Some(k) => match k {
-                crate::model::NodeKind::Card => 0,
-                crate::model::NodeKind::Action => 1,
-                crate::model::NodeKind::Guard => 2,
-                crate::model::NodeKind::Idea => 3,
+                crate::model::NodeKind::Genre => 0,
+                crate::model::NodeKind::Card => 1,
+                crate::model::NodeKind::Action => 2,
+                crate::model::NodeKind::Guard => 3,
+                crate::model::NodeKind::Idea => 4,
             },
             None => 9,
         };
@@ -250,12 +251,12 @@ impl Realm {
                     blocked: effective_status == "blocked",
                     effective_status,
                     effective_landmark: dag::effective_landmark(&nodes, &id),
-                    total_qp: if node.kind == crate::model::NodeKind::Card {
+                    total_qp: if node.kind.is_container() {
                         dag::aggregate_qp(&nodes, &id)
                     } else {
                         node.quest_points()
                     },
-                    locked_qp_pct: if node.kind == crate::model::NodeKind::Card {
+                    locked_qp_pct: if node.kind.is_container() {
                         dag::locked_qp_percent(&nodes, &id)
                     } else {
                         None
@@ -790,10 +791,11 @@ mod tests {
     fn loads_sample_realm_from_examples() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/realm-demo");
         let realm = Realm::open(&root).unwrap();
-        assert_eq!(realm.nodes.len(), 6, "sample realm has 6 node files");
+        assert_eq!(realm.nodes.len(), 7, "sample realm has 7 node files");
         assert_eq!(
             realm.sorted_ids().first().map(String::as_str),
-            Some("CARD-4M1P")
+            Some("GENRE-3Z8N"),
+            "genres sort first"
         );
         assert!(realm.taxonomy.is_valid_discipline("Programming/Locomotion"));
         assert!(

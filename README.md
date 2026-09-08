@@ -25,6 +25,13 @@ cargo run -p legend_cli -- --realm examples/realm-demo tree CARD-K9F2
 
 # Frontend (Vue renderer)
 cd frontend && npm install && npm run dev   # Vite dev server on http://localhost:5173
+
+# Desktop app (pick one)
+scripts\dev-desktop.bat       # hot-reload renderer (Vite :5173) + Tauri dev mode
+scripts\preview-desktop.bat   # production renderer (frontend/dist) + custom-protocol mode
+
+# Frontend only in a browser (demo fixture, read-only)
+cd frontend && npm run dev   # http://localhost:5173
 ```
 
 ## Reading the spec

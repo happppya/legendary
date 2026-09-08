@@ -10,20 +10,38 @@ import { computed } from 'vue'
 import type { NodeView } from '../../../types'
 import { ancestorChain } from '../../../lib/node'
 import NodeBreadcrumbs from './NodeBreadcrumbs.vue'
-import NodeHeader from './NodeHeader.vue'
 import NodeStatusChips from './NodeStatusChips.vue'
 import NodeMetaSheet from './NodeMetaSheet.vue'
-import NodeNotes from './NodeNotes.vue'
+import NodeActions from './NodeActions.vue'
+import NodeBodyEditor from './NodeBodyEditor.vue'
+import NodeMetaEditor from './NodeMetaEditor.vue'
+import type { MetaEdits } from './NodeMetaEditor.vue'
 
 const props = defineProps<{
   node: NodeView | null
   nodesById: Map<string, NodeView>
   realmName: string
+  /** Mutations are desktop-only; the browser fixture preview hides them. */
+  canMutate: boolean
+  /** IPC round-trip in flight (drives Save button busy states). */
+  busy: boolean
+  /** Vocabulary rows from the realm for the editor pickers. */
+  disciplineOptions: { key: string; label: string }[]
+  epicOptions: { key: string; label: string }[]
+  landmarkOptions: { key: string; label: string }[]
 }>()
 
 const emit = defineEmits<{
   select: [id: string]
   filter: [{ field: 'discipline' | 'epic' | 'tag' | 'landmark'; value: string }]
+  vanquish: []
+  'delete-subgraph': []
+  wrap: []
+  'reparent-root': []
+  'save-body': [body: string]
+  'save-title': [title: string]
+  'set-status': [status: 'unstarted' | 'active' | 'vanquished']
+  'save-meta': [edits: MetaEdits]
 }>()
 
 /* ---- position in the realm ------------------------------------------- */
@@ -47,10 +65,41 @@ const blockedRefs = computed<{ id: string; label: string }[]>(() => {
 <template>
   <article v-if="node" class="detail" :class="node.kind">
     <NodeBreadcrumbs :realm-name="realmName" :ancestors="ancestors" @select="emit('select', $event)" />
-    <NodeHeader :node="node" />
     <NodeStatusChips :node="node" :blocked-refs="blockedRefs" @select="emit('select', $event)" />
+    <NodeBodyEditor
+      :node="node"
+      :can-mutate="canMutate"
+      :busy="busy"
+      @save-title="emit('save-title', $event)"
+      @save-body="emit('save-body', $event)"
+    />
     <NodeMetaSheet :node="node" @filter="emit('filter', $event)" />
-    <NodeNotes :node="node" />
+    <NodeMetaEditor
+      :node="node"
+      :can-mutate="canMutate"
+      :busy="busy"
+      :discipline-options="disciplineOptions"
+      :epic-options="epicOptions"
+      :landmark-options="landmarkOptions"
+      @set-status="emit('set-status', $event)"
+      @save-meta="emit('save-meta', $event)"
+    />
+    <NodeActions
+      :node="node"
+      :can-mutate="canMutate"
+      @vanquish="emit('vanquish')"
+      @delete-subgraph="emit('delete-subgraph')"
+      @wrap="emit('wrap')"
+      @reparent-root="emit('reparent-root')"
+    />
+    <NodeActions
+      :node="node"
+      :can-mutate="canMutate"
+      @vanquish="emit('vanquish')"
+      @delete-subgraph="emit('delete-subgraph')"
+      @wrap="emit('wrap')"
+      @reparent-root="emit('reparent-root')"
+    />
   </article>
 
   <article v-else class="detail empty-detail">

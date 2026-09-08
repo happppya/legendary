@@ -3,7 +3,7 @@
 //! Point aggregation, locked-QP percentages, landmark inheritance, and the
 //! forced-cascade vanquish rule.
 
-use crate::model::{Node, NodeKind};
+use crate::model::Node;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 const MAX_DEPTH: usize = 1000;
@@ -49,9 +49,9 @@ pub fn is_blocked(nodes: &HashMap<String, Node>, id: &str) -> bool {
 ///
 /// - leaf kinds: `vanquished` if vanquished, else `blocked` when a
 ///   prerequisite is unvanquished, else their stored status;
-/// - Cards: `blocked` if any direct active child is blocked, `vanquished`
-///   when all children are vanquished (or the card itself is), else their
-///   stored status.
+/// - containers (Card/Genre): `blocked` if any direct active child is
+///   blocked, `vanquished` when all children are vanquished (or the node
+///   itself is), else their stored status.
 ///
 /// Depth-capped so defensive indexing can never stack-overflow on manual
 /// cycles (spec §4.3).
@@ -63,7 +63,7 @@ pub fn effective_status(nodes: &HashMap<String, Node>, id: &str) -> String {
         let Some(node) = nodes.get(id) else {
             return "unknown".to_string();
         };
-        if node.kind == NodeKind::Card {
+        if node.kind.is_container() {
             let kids = children_sorted(nodes, id);
             if kids.is_empty() {
                 return node.status.to_string();
@@ -330,7 +330,7 @@ pub fn cascade_ids(nodes: &HashMap<String, Node>, card: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{NodeFile, Priority, Status};
+    use crate::model::{NodeFile, NodeKind, Priority, Status};
     use std::collections::HashMap;
 
     fn task(

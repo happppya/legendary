@@ -11,7 +11,7 @@ epics:                          # Multi-value component (Validated against taxon
   - Combat_Engine/Locomotion
   - Core_Systems/Player
 landmark: Landmark_01_Demo      # Validated against landmarks.yaml / Landmarks folder
-parent: null
+parent: GENRE-3Z8N
 blocked_by: []
 created_at: 2026-09-04T18:00:00Z
 completed_at: null

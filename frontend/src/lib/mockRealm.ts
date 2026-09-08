@@ -42,7 +42,7 @@ type Priority = 'critical' | 'high' | 'medium' | 'low'
 
 interface Entry {
   key: string
-  kind: 'card' | 'action' | 'guard' | 'idea'
+  kind: 'card' | 'genre' | 'action' | 'guard' | 'idea'
   title: string
   status: Status
   priority: Priority
@@ -84,10 +84,10 @@ const PUBLISHER = 'Publisher Vertical Slice'
 const RAW: Entry[] = [
   /* ---- Combat Engine root ------------------------------------------ */
   {
-    key: 'ce', kind: 'card', title: 'Combat Engine', status: 'active', priority: 'high',
+    key: 'ce', kind: 'genre', title: 'Combat Engine', status: 'active', priority: 'high',
     epics: [E.combat], disciplines: [D.prog, D.gameplay], landmark: PLAYTEST,
     createdAt: '2025-05-05T09:00:00Z',
-    body: `## System Context
+    body: `## Genre Scope
 
 The combat engine owns every moment-to-moment gameplay system in the
 vertical slice: locomotion, abilities, stamina and camera feel.
@@ -96,10 +96,10 @@ Child cards track each feature domain.`,
   },
   /* ---- Locomotion System (focused subgraph root) -------------------- */
   {
-    key: 'loc', kind: 'card', title: 'Locomotion System', status: 'active', priority: 'high',
+    key: 'loc', kind: 'genre', title: 'Locomotion System', status: 'active', priority: 'high',
     parent: 'ce', epics: [E.loco], disciplines: [D.prog, D.gameplay], landmark: PLAYTEST,
     createdAt: '2025-05-05T09:05:00Z',
-    body: `## Locomotion System
+    body: `## Genre Scope
 
 Everything that moves the player character. Ships as the core of the
 Steam Playtest Demo slice.
@@ -403,6 +403,7 @@ for the Abilities epic if it needs a resource cost.`,
 
 const KIND_PREFIX: Record<string, string> = {
   card: 'CARD',
+  genre: 'GENRE',
   action: 'ACT',
   guard: 'GRD',
   idea: 'IDEA',
@@ -470,7 +471,7 @@ function compile(): { nodes: BuiltNode[]; byKey: Map<string, BuiltNode> } {
       priority: e.priority,
       disciplines: [...e.disciplines],
       epics: [...e.epics],
-      questPoints: e.kind === 'card' ? null : (e.qp ?? null),
+      questPoints: e.kind === 'card' || e.kind === 'genre' ? null : (e.qp ?? null),
       landmark: null,
       explicitLandmark: e.landmark ?? null,
       parent: e.parent ? idByKey.get(e.parent) ?? null : null,

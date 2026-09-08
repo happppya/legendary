@@ -78,6 +78,7 @@
 
   /* Kind tiles (node kind color coding, both themes share the mid tones) */
   --kind-card: #d99b45;
+  --kind-genre: #8f7cc2;
   --kind-action: #5d93d0;
   --kind-guard: #cf6d4f;
   --kind-idea: #c2bcaf;
@@ -182,6 +183,7 @@
   --dot-done: #98a2b1;
 
   --kind-card: #cf9337;
+  --kind-genre: #7a68ab;
   --kind-action: #4a84c4;
   --kind-guard: #bd5f42;
   --kind-idea: #a49d8f;

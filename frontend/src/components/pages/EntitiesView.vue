@@ -5,7 +5,7 @@
 
 import { computed } from 'vue'
 import type { NodeView } from '../../types'
-import { KIND_ICON, KIND_LABEL, KINDS } from '../../lib/kind'
+import { KIND_ICON, KIND_LABEL, KINDS, isContainerKind } from '../../lib/kind'
 import type { CheckRow } from '../../lib/filters'
 
 const props = defineProps<{ nodes: NodeView[]; kindCounts: CheckRow[] }>()
@@ -13,6 +13,7 @@ const emit = defineEmits<{ browse: [kind: string] }>()
 
 const DESCRIPTIONS: Record<string, string> = {
   card: 'Container / group nodes. Hold documentation, system context and child nodes.',
+  genre: 'Broad categorization branches grouping whole system families.',
   action: 'Single, short, clearly defined execution goals with quest points.',
   guard: 'Quality gates — code review, QA pass, build verification.',
   idea: 'Speculative pitches and concept exploration.',
@@ -46,7 +47,7 @@ const groups = computed(() =>
           <li v-for="n in g.nodes" :key="n.id" class="ent-item">
             <i class="sdot" :class="`dot-${n.effectiveStatus}`" aria-hidden="true"></i>
             <span class="ent-name" :title="n.title">{{ n.title }}</span>
-            <span v-if="n.kind === 'card' && n.totalQp" class="ent-qp mono">{{ n.totalQp }}</span>
+            <span v-if="isContainerKind(n.kind) && n.totalQp" class="ent-qp mono">{{ n.totalQp }}</span>
             <span v-else-if="n.questPoints !== null" class="ent-qp mono">{{ n.questPoints }}</span>
           </li>
           <li v-if="!g.nodes.length" class="ent-empty">No {{ g.label.toLowerCase() }}s yet.</li>
@@ -105,6 +106,10 @@ const groups = computed(() =>
 
 .ent-tile.card {
   background: var(--kind-card);
+}
+
+.ent-tile.genre {
+  background: var(--kind-genre);
 }
 
 .ent-tile.action {

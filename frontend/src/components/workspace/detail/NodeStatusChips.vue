@@ -6,6 +6,7 @@
 import { PhLock } from '@phosphor-icons/vue'
 import type { NodeView } from '../../../types'
 import { STATUS_LABEL } from '../../../lib/status'
+import { isContainerKind } from '../../../lib/kind'
 
 defineProps<{
   node: NodeView
@@ -26,7 +27,7 @@ function hasOwnQp(n: NodeView): boolean {
 }
 
 function isAggregateCard(n: NodeView): boolean {
-  return n.kind === 'card' && n.totalQp > 0
+  return isContainerKind(n.kind) && n.totalQp > 0
 }
 </script>
 

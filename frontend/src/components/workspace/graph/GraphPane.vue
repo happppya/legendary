@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Local graph view (workspace top half). A lightweight force-directed
+// Graph view (workspace top half). A lightweight force-directed
 // simulator (springs along the edges, charge repulsion between nodes, weak
 // centre gravity - the shape the design doc's graph engine will take, see
 // doc 07) auto-lays the scene out. Pause it to freeze, drag any node to
@@ -12,6 +12,11 @@
 // Node shapes follow design doc 05: Cards are squares, Actions pills,
 // Guards diamonds and Ideas dashed pills. Clicking a node drives the shared
 // selection, breadcrumb and inspector.
+//
+// Three scopes (test-feedback A-1): `local` re-centres on the selection,
+// `global` shows every node in the realm (Feature A-a), `overview` shows
+// the Realm Origin branching into genre subtrees, terminating at the first
+// non-genre node (Feature A-b).
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
@@ -21,13 +26,27 @@ import {
   PhPause,
   PhPlay,
   PhPlus,
-  PhDotsThreeOutlineVertical,
 } from '@phosphor-icons/vue'
+import { OVERLAY_LABEL, OVERLAY_MODES } from '../../../lib/overlay'
 import type { NodeView } from '../../../types'
-import { KIND_LABEL } from '../../../lib/kind'
-import { ancestorChain } from '../../../lib/node'
+import { KIND_LABEL, isContainerKind } from '../../../lib/kind'
+import { ancestorChain, fullyVanquished, type CompletionLevel } from '../../../lib/node'
+import {
+  categoryColorMap,
+  overlayColor,
+  overlayLegend,
+  type OverlayMode,
+} from '../../../lib/overlay'
 import { SCENE_HEIGHT, SCENE_WIDTH } from '../../../lib/mockRealm'
-import { buildSceneItems, MAX_SCENE_NODES, scatterAll, sceneCenter, sceneSignature, type SceneItem } from './scene'
+import {
+  buildSceneItems,
+  MAX_SCENE_NODES,
+  scatterAll,
+  sceneCenter,
+  sceneSignature,
+  type GraphScope,
+  type SceneItem,
+} from './scene'
 import { applyForces } from './physics'
 import { drawEdges, linkedPairs, sceneEdges } from './edges'
 
@@ -36,9 +55,21 @@ const props = defineProps<{
   selectedId: string | null
   isMockScene: boolean
   realmName: string
+  /** Color overlay mode (doc 05 §5.3), owned by App (menu/chord/palette). */
+  overlayMode: OverlayMode
+  /** Graph scope: local neighbourhood, whole realm, or genre overview. */
+  scope: GraphScope
+  /** Completed-task visibility level (doc 05 §5.5 B). */
+  completionLevel: CompletionLevel
 }>()
 
-const emit = defineEmits<{ select: [id: string] }>()
+const emit = defineEmits<{
+  select: [id: string]
+  reparent: [childId: string, parentId: string]
+  'update:overlayMode': [mode: OverlayMode]
+  'update:scope': [scope: GraphScope]
+  'update:completionLevel': [level: CompletionLevel]
+}>()
 
 /** Node metadata + live physics state, keyed by scene spot key. */
 const live = ref<SceneItem[]>([])
@@ -58,9 +89,13 @@ function syncScene() {
 }
 
 onMounted(syncScene)
-watch(() => [props.isMockScene, props.nodesById], syncScene)
+watch(() => [props.isMockScene, props.nodesById, props.selectedId, props.scope], syncScene)
 
 const sceneItems = computed<SceneItem[]>(() => live.value)
+
+/** Scene member keys (spot keys on the mock, node ids elsewhere) — restricts
+ * edge discovery and the linked-pair spring set to the visible scene. */
+const keyMap = computed(() => new Map(live.value.map((i) => [i.key, true] as const)))
 
 /* ---- force simulation ---------------------------------------------------- */
 
@@ -70,7 +105,9 @@ let lastStep = 0
 
 // Linked pairs share a Hooke spring toward rest; everything else just
 // repels, so connected clusters stay tight while unrelated nodes part.
-const linked = computed(() => linkedPairs(sceneEdges(props.isMockScene, props.nodesById)))
+const linked = computed(() =>
+  linkedPairs(sceneEdges(props.isMockScene, props.nodesById, keyMap.value)),
+)
 
 function step(timestamp: number) {
   rafId = 0
@@ -139,6 +176,39 @@ function onPointerDown(e: PointerEvent, item: SceneItem) {
   window.addEventListener('pointerup', onPointerUp)
 }
 
+function onClickItem(item: SceneItem) {
+  if (suppressClick.value) {
+    suppressClick.value = false
+    return
+  }
+  emit('select', item.node.id)
+}
+
+/** Node currently under the dragged item (drop target highlight). */
+const dropTargetKey = ref<string | null>(null)
+
+/** Mutations are desktop-only; the mock scene cannot reparent. The App
+ * layer passes a listener for our `reparent` emit — detect it without a
+ * dedicated prop by checking the component's own listeners is not possible
+ * in script setup, so reparent is always offered and App no-ops when
+ * mutation is unavailable. */
+const canReparent = computed(() => !props.isMockScene)
+
+function findDropTarget(clientX: number, clientY: number): SceneItem | null {
+  const p = toWorld(clientX, clientY)
+  let best: SceneItem | null = null
+  let bestD = Infinity
+  for (const it of live.value) {
+    if (it.key === draggingKey.value) continue
+    const d = Math.hypot(it.x - p.x, it.y - p.y)
+    if (d < Math.max(it.w, it.h) * 0.75 && d < bestD) {
+      best = it
+      bestD = d
+    }
+  }
+  return best
+}
+
 function onPointerMove(e: PointerEvent) {
   const key = draggingKey.value
   if (!key) return
@@ -150,20 +220,26 @@ function onPointerMove(e: PointerEvent) {
   item.y = Math.min(SCENE_HEIGHT - 60, Math.max(60, p.y - dragOffset.value.y))
   item.vx = 0
   item.vy = 0
+  // live drop-target detection while dragging
+  const target = canReparent.value ? findDropTarget(e.clientX, e.clientY) : null
+  dropTargetKey.value = target && isContainerKind(target.node.kind) ? target.key : null
 }
 
-function onPointerUp() {
+function onPointerUp(e: PointerEvent) {
+  const key = draggingKey.value
+  const targetKey = dropTargetKey.value
+  dropTargetKey.value = null
   draggingKey.value = null
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
-}
-
-function onClickItem(item: SceneItem) {
-  if (suppressClick.value) {
-    suppressClick.value = false
-    return
+  if (key && targetKey && canReparent.value) {
+    const child = live.value.find((n) => n.key === key)
+    const parent = live.value.find((n) => n.key === targetKey)
+    if (child && parent && child.node.parent !== parent.node.id) {
+      emit('reparent', child.node.id, parent.node.id)
+    }
   }
-  emit('select', item.node.id)
+  void e
 }
 
 onBeforeUnmount(() => {
@@ -190,13 +266,18 @@ function resetZoom() {
 
 /* ---- edges ------------------------------------------------------------------- */
 
-const edges = computed(() => drawEdges(live.value, sceneEdges(props.isMockScene, props.nodesById)))
+const edges = computed(() =>
+  drawEdges(live.value, sceneEdges(props.isMockScene, props.nodesById, keyMap.value)),
+)
 
 /** Why the canvas is empty (if it is) - drives the fallback copy. */
-const sceneHolds = computed<'mock' | 'realm' | 'empty' | 'large'>(() => {
+const sceneHolds = computed<'mock' | 'realm' | 'empty' | 'large' | 'nogenre'>(() => {
   if (props.isMockScene) return 'mock'
   if (props.nodesById.size === 0) return 'empty'
   if (props.nodesById.size > MAX_SCENE_NODES) return 'large'
+  if (props.scope === 'overview' && ![...props.nodesById.values()].some((n) => n.kind === 'genre')) {
+    return 'nogenre'
+  }
   return 'realm'
 })
 
@@ -218,6 +299,7 @@ const crumbs = computed<{ id: string | null; label: string }[]>(() => {
 
 const LEGEND_SHAPES = [
   { key: 'card', label: 'Card' },
+  { key: 'genre', label: 'Genre' },
   { key: 'action', label: 'Action' },
   { key: 'guard', label: 'Guard' },
   { key: 'idea', label: 'Idea' },
@@ -225,6 +307,198 @@ const LEGEND_SHAPES = [
 
 function statusDotClass(status: string): string {
   return `st-${status}`
+}
+
+/* ---- overlays (doc 05 §5.3) -------------------------------------------- */
+
+/** Categorical color maps, built from the realm's declared branch paths. */
+const epicColors = computed(() => {
+  const paths = new Set<string>()
+  for (const n of props.nodesById.values()) for (const p of n.epics) paths.add(p)
+  return categoryColorMap([...paths])
+})
+const discColors = computed(() => {
+  const paths = new Set<string>()
+  for (const n of props.nodesById.values()) for (const p of n.disciplines) paths.add(p)
+  return categoryColorMap([...paths])
+})
+
+/** Stroke color override for a scene item under the active overlay. */
+function strokeFor(item: SceneItem): string | null {
+  if (props.isMockScene) return null
+  return overlayColor(props.overlayMode, item.node, epicColors.value, discColors.value)
+}
+
+/** Style binding for shape strokes (typed for Vue's StyleValue). */
+function strokeStyleFor(item: SceneItem): { stroke: string } | undefined {
+  const c = strokeFor(item)
+  return c ? { stroke: c } : undefined
+}
+
+const legendEntries = computed(() =>
+  props.isMockScene ? [] : overlayLegend(props.overlayMode, epicColors.value, discColors.value),
+)
+
+/* ---- depth scale (doc 05 §5.3) ----------------------------------------- */
+
+/** Depth in the parent tree (roots = 0). Drives visual scale/emphasis. */
+function depthOf(n: NodeView): number {
+  let d = 0
+  let cur: NodeView | undefined = n
+  const seen = new Set<string>()
+  while (cur?.parent && !seen.has(cur.id)) {
+    seen.add(cur.id)
+    cur = props.nodesById.get(cur.parent)
+    d += 1
+    if (d > 24) break
+  }
+  return d
+}
+
+const depthScale = computed(() => {
+  const m = new Map<string, number>()
+  if (props.isMockScene) return m
+  for (const n of props.nodesById.values()) {
+    const d = depthOf(n)
+    m.set(n.id, Math.max(0.8, 1.15 - d * 0.12))
+  }
+  return m
+})
+
+/** Render scale for an item (multiplies its base size). */
+function scaleFor(item: SceneItem): number {
+  return depthScale.value.get(item.node.id) ?? 1
+}
+
+/* ---- progress ring + locked-QP indicator (doc 05 §5.2 Cards) ------------ */
+
+/** Fraction of descendant leaf QP that is vanquished (0..1), or null. */
+function cardProgress(n: NodeView): number | null {
+  if (!isContainerKind(n.kind) || n.totalQp <= 0) return null
+  const byId = props.nodesById
+  const stack = [...(n.parent === null ? [] : [])]
+  void stack
+  let done = 0
+  const ids = [n.id]
+  while (ids.length) {
+    const cur = ids.pop()
+    for (const c of byId.values()) {
+      if (c.parent === cur) {
+        if (!isContainerKind(c.kind)) {
+          if (c.effectiveStatus === 'vanquished') done += c.questPoints ?? 0
+        } else {
+          ids.push(c.id)
+        }
+      }
+    }
+  }
+  return Math.min(1, done / n.totalQp)
+}
+
+/** SVG arc path for the progress ring (r = 7, centred top-right). */
+function ringArc(cx0: number, cy0: number, frac: number): string {
+  const r = 7
+  const a = frac * Math.PI * 2 - Math.PI / 2
+  const x = cx0 + r * Math.cos(a)
+  const y = cy0 + r * Math.sin(a)
+  const large = frac > 0.5 ? 1 : 0
+  return `M ${cx0} ${cy0 - r} A ${r} ${r} 0 ${large} 1 ${x.toFixed(2)} ${y.toFixed(2)}`
+}
+
+/* ---- Realm Origin (doc 05 §5.5 / Feature A-b overview) -------------------- */
+
+const ORIGIN_KEY = '__origin__'
+
+/** Overview scope injects a synthetic [ Realm Origin ] item; every root
+ * node gets an origin edge. */
+const originItem = computed<SceneItem | null>(() => {
+  if (props.scope !== 'overview' || !sceneItems.value.length) return null
+  return {
+    key: ORIGIN_KEY,
+    node: {
+      id: 'ORIGIN',
+      kind: 'card',
+      title: 'Realm Origin',
+      status: 'unstarted',
+      effectiveStatus: 'unstarted',
+      blocked: false,
+      priority: 'low',
+      disciplines: [],
+      epics: [],
+      questPoints: null,
+      landmark: null,
+      explicitLandmark: null,
+      parent: null,
+      blockedBy: [],
+      totalQp: 0,
+      lockedQpPercent: null,
+      completedAt: null,
+      createdAt: null,
+      tags: [],
+      path: '',
+      validationError: null,
+      body: '',
+    } as NodeView,
+    x: cx,
+    y: 64,
+    w: 150,
+    h: 40,
+    vx: 0,
+    vy: 0,
+  }
+})
+
+/** Scene items + the synthetic origin, in render order. */
+const renderItems = computed<SceneItem[]>(() =>
+  originItem.value ? [originItem.value, ...sceneItems.value] : sceneItems.value,
+)
+
+/** Completed-task visibility over the scope's members. */
+const visibleItems = computed<SceneItem[]>(() => {
+  if (props.isMockScene || props.completionLevel === 2) return renderItems.value
+  const byId = props.nodesById
+  const keep = new Set<string>()
+  for (const n of byId.values()) {
+    if (n.effectiveStatus === 'vanquished') {
+      if (props.completionLevel === 0) continue
+      // level 1: keep if inside a kept (partial) top-level card
+      let cur: NodeView | undefined = n
+      const seen = new Set<string>()
+      let kept = false
+      while (cur?.parent && !seen.has(cur.id)) {
+        seen.add(cur.id)
+        const p = byId.get(cur.parent)
+        if (!p) break
+        if (p.parent === null && isContainerKind(p.kind) && !fullyVanquished(byId, p)) {
+          kept = true
+          break
+        }
+        cur = p
+      }
+      if (!kept) continue
+    }
+    keep.add(n.id)
+  }
+  const out = renderItems.value.filter((it) => it.key === ORIGIN_KEY || keep.has(it.key))
+  return out
+})
+
+/** Origin edges: origin → every top-level member (overview scope only). */
+const originEdges = computed(() => {
+  if (!originItem.value) return []
+  const o = originItem.value
+  const out: { x1: number; y1: number; x2: number; y2: number }[] = []
+  for (const n of props.nodesById.values()) {
+    if (n.parent === null) {
+      const it = visibleItems.value.find((i) => i.key === n.id)
+      if (it) out.push({ x1: o.x, y1: o.y + o.h / 2, x2: it.x, y2: it.y - it.h / 2 })
+    }
+  }
+  return out
+})
+
+function isOrigin(item: SceneItem): boolean {
+  return item.key === ORIGIN_KEY
 }
 </script>
 
@@ -247,6 +521,18 @@ function statusDotClass(status: string): string {
         </template>
       </nav>
       <div class="graph-tools">
+        <select
+          class="overlay-select scope-select"
+          :value="scope"
+          aria-label="Graph scope"
+          title="Graph scope: local neighbourhood, whole realm, or genre overview"
+          @change="$emit('update:scope', ($event.target as HTMLSelectElement).value as GraphScope)"
+        >
+          <option value="local">Local graph</option>
+          <option value="global">Global graph (whole realm)</option>
+          <option value="overview">Genre overview</option>
+        </select>
+        <span class="tool-divider" aria-hidden="true"></span>
         <button
           type="button"
           class="tool-btn"
@@ -280,9 +566,28 @@ function statusDotClass(status: string): string {
           <PhArrowsOut :size="12" aria-hidden="true" />
         </button>
         <span class="tool-divider" aria-hidden="true"></span>
-        <button type="button" class="tool-btn" aria-label="Graph options" title="View options (coming soon)">
-          <PhDotsThreeOutlineVertical :size="13" aria-hidden="true" />
-        </button>
+        <select
+          class="overlay-select"
+          :value="overlayMode"
+          aria-label="Color overlay mode"
+          title="Color overlay mode (doc 05 §5.3)"
+          @change="$emit('update:overlayMode', ($event.target as HTMLSelectElement).value as OverlayMode)"
+        >
+          <option v-for="m in OVERLAY_MODES" :key="m" :value="m">{{ OVERLAY_LABEL[m] }}</option>
+        </select>
+        <template v-if="!isMockScene">
+          <select
+            class="overlay-select"
+            :value="completionLevel"
+            aria-label="Completed task visibility"
+            title="Completed-task visibility (doc 05 §5.5 B)"
+            @change="$emit('update:completionLevel', Number(($event.target as HTMLSelectElement).value) as CompletionLevel)"
+          >
+            <option :value="2">Show all completed</option>
+            <option :value="1">Hide completed subgraphs</option>
+            <option :value="0">Hide all completed</option>
+          </select>
+        </template>
       </div>
     </div>
 
@@ -308,6 +613,16 @@ function statusDotClass(status: string): string {
 
           <g :transform="viewTransform">
             <line
+              v-for="(e, i) in originEdges"
+              :key="`o${i}`"
+              :x1="e.x1"
+              :y1="e.y1"
+              :x2="e.x2"
+              :y2="e.y2"
+              class="edge edge-origin"
+            />
+
+            <line
               v-for="(e, i) in edges"
               :key="i"
               :x1="e.x1"
@@ -320,23 +635,41 @@ function statusDotClass(status: string): string {
             />
 
             <g
-              v-for="item in sceneItems"
+              v-for="item in visibleItems"
               :key="item.node.id"
               class="gnode"
-              :class="{ sel: item.node.id === selectedId, held: draggingKey === item.key }"
+              :class="{ sel: item.node.id === selectedId, held: draggingKey === item.key, droptarget: dropTargetKey === item.key, origin: isOrigin(item) }"
+              :transform="`scale(${isOrigin(item) ? 1 : scaleFor(item)})`"
+              :style="isOrigin(item) ? undefined : { transformOrigin: `${item.x}px ${item.y}px`, transformBox: 'fill-box' }"
               @pointerdown="onPointerDown($event, item)"
               @click="onClickItem(item)"
             >
               <title>{{ KIND_LABEL[item.node.kind] }} — {{ item.node.title }} ({{ item.node.effectiveStatus }})</title>
 
-              <g v-if="item.node.kind === 'card'">
+              <g v-if="isOrigin(item)">
                 <rect
-                  class="shape shape-card"
+                  class="shape shape-origin"
+                  :x="item.x - item.w / 2"
+                  :y="item.y - item.h / 2"
+                  :width="item.w"
+                  :height="item.h"
+                  rx="10"
+                />
+                <text class="node-title card origin-title" :x="item.x" :y="item.y + 4">
+                  [ Realm Origin ]
+                </text>
+              </g>
+
+              <g v-else-if="isContainerKind(item.node.kind)">
+                <rect
+                  class="shape"
+                  :class="item.node.kind === 'genre' ? 'shape-genre' : 'shape-card'"
                   :x="item.x - item.w / 2"
                   :y="item.y - item.h / 2"
                   :width="item.w"
                   :height="item.h"
                   rx="12"
+                  :style="strokeStyleFor(item)"
                 />
                 <circle
                   class="shape-dot"
@@ -357,6 +690,22 @@ function statusDotClass(status: string): string {
                     {{ item.node.totalQp }} QP
                   </text>
                 </g>
+                <g
+                  v-if="cardProgress(item.node) !== null"
+                  class="progress-ring"
+                  :transform="`translate(${item.x + item.w / 2 - 66} ${item.y - item.h / 2 + 15})`"
+                >
+                  <circle class="ring-track" r="7" />
+                  <path class="ring-arc" :d="ringArc(0, 0, cardProgress(item.node) ?? 0)" />
+                </g>
+                <g
+                  v-if="item.node.lockedQpPercent !== null && item.node.lockedQpPercent > 0"
+                  class="locked-ind"
+                  :transform="`translate(${item.x - item.w / 2 + 62} ${item.y - item.h / 2 + 15})`"
+                >
+                  <circle class="locked-dot" r="4" />
+                  <text class="locked-pct mono" y="3.4">{{ Math.round(item.node.lockedQpPercent) }}</text>
+                </g>
               </g>
 
               <g v-else-if="item.node.kind === 'action' || item.node.kind === 'idea'">
@@ -368,6 +717,7 @@ function statusDotClass(status: string): string {
                   :width="item.w"
                   :height="item.h"
                   rx="15"
+                  :style="strokeStyleFor(item)"
                 />
                 <circle
                   class="shape-dot"
@@ -385,6 +735,7 @@ function statusDotClass(status: string): string {
                 <path
                   class="shape shape-guard"
                   :d="`M ${item.x} ${item.y - item.h / 2} L ${item.x + item.w / 2} ${item.y} L ${item.x} ${item.y + item.h / 2} L ${item.x - item.w / 2} ${item.y} Z`"
+                  :style="strokeStyleFor(item)"
                 />
                 <circle
                   class="shape-dot guard-dot"
@@ -432,6 +783,12 @@ function statusDotClass(status: string): string {
               <span>{{ s.label }}</span>
             </span>
           </div>
+          <div v-if="legendEntries.length" class="legend-edges">
+            <span v-for="e in legendEntries.slice(0, 8)" :key="e.label" class="legend-row">
+              <i class="glyph g-swatch" :style="{ background: e.color }" aria-hidden="true"></i>
+              <span>{{ e.label }}</span>
+            </span>
+          </div>
           <div class="legend-edges">
             <span class="legend-row">
               <i class="glyph g-line solid" aria-hidden="true"></i>
@@ -453,6 +810,10 @@ function statusDotClass(status: string): string {
         </p>
         <p v-else-if="sceneHolds === 'empty'" class="fallback-body">
           No nodes in this realm yet. Create one from File &rarr; New Realm.
+        </p>
+        <p v-else-if="sceneHolds === 'nogenre'" class="fallback-body">
+          No genre nodes yet &mdash; create a Genre (a broad categorization
+          like &ldquo;Combat Engine&rdquo;) and parent root Cards beneath it.
         </p>
         <p v-else class="fallback-body">
           Nothing to draw here yet. The realm&rsquo;s
@@ -633,6 +994,16 @@ function statusDotClass(status: string): string {
   stroke: var(--gold);
 }
 
+.gnode.droptarget .shape {
+  stroke-width: 2.4;
+  stroke: var(--gold);
+  stroke-dasharray: 5 4;
+}
+
+.gnode.droptarget {
+  filter: drop-shadow(0 0 6px var(--gold));
+}
+
 .shape {
   stroke-width: 1.5;
 }
@@ -640,6 +1011,12 @@ function statusDotClass(status: string): string {
 .shape-card {
   fill: var(--graph-card-fill);
   stroke: var(--kind-card);
+}
+
+.shape-genre {
+  fill: var(--graph-card-fill);
+  stroke: var(--kind-genre);
+  stroke-width: 1.8;
 }
 
 .shape-action {
@@ -754,6 +1131,10 @@ function statusDotClass(status: string): string {
   fill: var(--kind-card);
 }
 
+.mm-node.genre {
+  fill: var(--kind-genre);
+}
+
 .mm-node.action {
   fill: var(--kind-action);
 }
@@ -817,6 +1198,12 @@ function statusDotClass(status: string): string {
   border-radius: 3px;
 }
 
+.g-genre {
+  background: transparent;
+  border: 1.8px solid var(--kind-genre);
+  border-radius: 3px;
+}
+
 .g-action {
   background: var(--graph-pill-fill);
   border: 1.5px solid var(--kind-action);
@@ -864,6 +1251,82 @@ function statusDotClass(status: string): string {
 .g-line.dashed {
   border-top: 1.5px dashed var(--graph-optional);
   color: var(--graph-optional);
+}
+
+.g-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  border: 1px solid var(--line-1);
+}
+
+/* ---- overlays, origin, rings ---------------------------------------------- */
+
+.overlay-select {
+  height: 22px;
+  max-width: 150px;
+  border-radius: var(--r-s);
+  border: 1px solid var(--line-1);
+  background: var(--bg-2);
+  color: var(--text-2);
+  font-size: 10.5px;
+  outline: none;
+}
+
+.overlay-select.scope-select {
+  max-width: 190px;
+}
+
+.overlay-select:focus {
+  border-color: var(--gold);
+}
+
+.edge-origin {
+  stroke: var(--graph-line);
+  stroke-dasharray: 2 4;
+  opacity: 0.6;
+}
+
+.shape-origin {
+  fill: var(--graph-card-fill);
+  stroke: var(--faint);
+  stroke-dasharray: 3 3;
+}
+
+.origin-title {
+  text-anchor: middle;
+  fill: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.gnode.origin {
+  cursor: default;
+}
+
+.ring-track {
+  fill: none;
+  stroke: var(--line-2);
+  stroke-width: 2;
+}
+
+.ring-arc {
+  fill: none;
+  stroke: var(--dot-done);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.locked-dot {
+  fill: none;
+  stroke: var(--chip-blocked-fg);
+  stroke-width: 1.4;
+}
+
+.locked-pct {
+  font-size: 6.5px;
+  text-anchor: middle;
+  fill: var(--chip-blocked-fg);
 }
 
 /* ---- fallback -------------------------------------------------------------- */

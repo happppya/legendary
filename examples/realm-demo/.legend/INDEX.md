@@ -4,6 +4,7 @@
 
 |ID|Kind|Title|Status|Landmark|QP|
 |---|---|---|---|---|---|
+|GENRE-3Z8N|Genre|Player Systems|blocked||14|
 |CARD-4M1P|Card|UI & HUD|active||5|
 |CARD-K9F2|Card|Player Movement & Controller Core|blocked|Landmark_01_Demo|9|
 |ACT-3X7P|Action|Deduct Stamina on Dash Trigger|blocked|Landmark_01_Demo|3|

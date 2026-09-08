@@ -1,13 +1,14 @@
 //! `legend` — the agent-first CLI over a Legendary realm (spec §6.4).
 //!
 //! Every write/mutation command synchronously rewrites `.legend/index.json`
-//! and `.legend/INDEX.md` before returning exit status 0.
+//! and `.legend/INDEX.md` before returning exit status 0. All mutation
+//! semantics live in `legend_core::ops` so the CLI and the desktop shell
+//! share one implementation and cannot drift.
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
-use legend_core::dag;
-use legend_core::id::{generate_unique, slugify_title};
-use legend_core::model::{utc_now_rfc3339, Node, NodeFile, NodeKind, Priority, Status};
+use legend_core::model::{NodeKind, Priority, Status};
+use legend_core::ops::{self, CreateArgs, MutationOutcome, OpsError, UpdateArgs};
 use legend_core::scaffold::scaffold;
 use legend_core::{NodeComputed, Realm};
 use serde_json::{json, Value};
@@ -172,15 +173,6 @@ fn print_node_line(realm: &Realm, id: &str) {
         "{}\t{}\t{}\t{}\t{}\t{}",
         n.id, n.kind, comp.effective_status, lm, qp, n.title
     );
-}
-
-fn kind_prefix_body(kind: NodeKind) -> &'static str {
-    match kind {
-        NodeKind::Card => "\n## System Context & Architectural Design\n",
-        NodeKind::Action => "\n## Action Goal\n",
-        NodeKind::Guard => "\n## Quality Check Criteria\n",
-        NodeKind::Idea => "\n## Idea Concept & Mechanics Exploration\n",
-    }
 }
 
 fn query(realm: &Realm, cli: &Cli) -> Result<()> {
@@ -368,6 +360,7 @@ fn tree(realm: &Realm, cli: &Cli) -> Result<()> {
             "{indent}{} [{}] {}{}",
             match n.kind {
                 NodeKind::Card => "▪",
+                NodeKind::Genre => "◫",
                 NodeKind::Guard => "◇",
                 NodeKind::Idea => "○",
                 NodeKind::Action => "•",
@@ -385,17 +378,29 @@ fn tree(realm: &Realm, cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-fn commit(realm: &mut Realm) -> Result<()> {
-    realm.recompute();
-    realm.sync_index()?;
+/// Report an [`MutationOutcome`]: the one-line summary plus, with `--json`,
+/// the affected node payloads. Used by every mutation command.
+fn report(realm: &Realm, out: &MutationOutcome, json: bool, focus_id: &str) -> Result<()> {
+    println!("{}", out.message);
+    if json {
+        let mut ids: Vec<&String> = out.created.iter().collect::<Vec<_>>();
+        ids.extend(out.changed.iter());
+        let focus = ids.iter().find(|i| i.as_str() == focus_id).copied();
+        let show = focus.map(|s| s.as_str()).unwrap_or(focus_id);
+        if realm.nodes.contains_key(show) {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&node_json(realm, show).unwrap())?
+            );
+        }
+    }
     Ok(())
 }
 
-fn write_nodes(realm: &mut Realm, ids: &[String]) -> Result<()> {
-    for id in ids {
-        realm.write_node(id)?;
-    }
-    Ok(())
+/// Map a shared [`OpsError`] onto process exit semantics (message on stderr,
+/// exit status 1 for agent pipelines).
+fn fail(err: OpsError) -> anyhow::Error {
+    anyhow::Error::msg(err.to_string())
 }
 
 fn create(realm: &mut Realm, cli: &Cli) -> Result<()> {
@@ -415,49 +420,19 @@ fn create(realm: &mut Realm, cli: &Cli) -> Result<()> {
         Some(p) => p.parse::<Priority>().map_err(anyhow::Error::msg)?,
         None => Priority::Medium,
     };
-    if let Some(qp) = quest_points {
-        if !legend_core::model::is_valid_quest_points(*qp) {
-            bail!("quest_points must be Fibonacci: 1, 2, 3, 5, 8, 13, 21");
-        }
-    }
-    if let Some(p) = parent {
-        if !realm.nodes.contains_key(p) {
-            bail!("unknown parent `{p}`");
-        }
-    }
-    let now = utc_now_rfc3339();
-    let node = Node {
-        id: String::new(),
-        kind,
-        title: title.clone(),
-        status: Status::Unstarted,
-        priority,
-        disciplines: vec![],
-        epics: vec![],
-        quest_points: *quest_points,
-        landmark: None,
-        parent: parent.clone(),
-        blocked_by: vec![],
-        created_at: Some(now.clone()),
-        completed_at: None,
-        tags: vec![],
-    };
-    let mut file = NodeFile {
-        node,
-        body: kind_prefix_body(kind).to_string(),
-    };
-    let id = generate_unique(kind, |candidate| realm.nodes.contains_key(candidate));
-    file.node.id = id.to_string();
-    let created = realm.create_node_file(file, &slugify_title(title))?;
-    commit(realm)?;
-    println!("created {} at {}", id, created.display());
-    if *json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&node_json(realm, &id.to_string()).unwrap())?
-        );
-    }
-    Ok(())
+    let out = ops::create(
+        realm,
+        CreateArgs {
+            kind,
+            title: title.clone(),
+            parent: parent.clone(),
+            priority,
+            quest_points: *quest_points,
+        },
+    )
+    .map_err(fail)?;
+    let id = out.created[0].clone();
+    report(realm, &out, *json, &id)
 }
 
 fn init(cli: &Cli) -> Result<()> {
@@ -500,53 +475,16 @@ fn update(realm: &mut Realm, cli: &Cli) -> Result<()> {
         );
     }
     let new_status = status_str.parse::<Status>().map_err(anyhow::Error::msg)?;
-    let Some(node) = realm.nodes.get(id).map(|f| f.node.clone()) else {
-        bail!("no such node `{id}`");
-    };
-
-    let mut changed = vec![id.clone()];
-    if node.kind == NodeKind::Card && new_status == Status::Vanquished {
-        let remaining = dag::count_unvanquished_leaves(&realm.node_map(), id);
-        if remaining > 0 && !*cascade {
-            bail!(
-                "Cannot vanquish Card {id}. {remaining} child tasks remaining. Use --cascade to force complete."
-            );
-        }
-        let targets: Vec<String> = if *cascade {
-            dag::cascade_ids(&realm.node_map(), id)
-        } else {
-            vec![]
-        };
-        for t in &targets {
-            let f = realm.nodes.get_mut(t).unwrap();
-            f.node.status = Status::Vanquished;
-            f.node.completed_at = Some(utc_now_rfc3339());
-        }
-        changed.extend(targets);
-        let f = realm.nodes.get_mut(id).unwrap();
-        f.node.status = Status::Vanquished;
-        f.node.completed_at = Some(utc_now_rfc3339());
-    } else {
-        let f = realm.nodes.get_mut(id).unwrap();
-        f.node.status = new_status;
-        if new_status == Status::Vanquished {
-            f.node.completed_at = Some(utc_now_rfc3339());
-        } else {
-            f.node.completed_at = None;
-        }
-    }
-    changed.sort();
-    changed.dedup();
-    write_nodes(realm, &changed)?;
-    commit(realm)?;
-    println!("updated {id} → {status_str}");
-    if *json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&node_json(realm, id).unwrap())?
-        );
-    }
-    Ok(())
+    let out = ops::update(
+        realm,
+        UpdateArgs {
+            id: id.clone(),
+            status: new_status,
+            cascade: *cascade,
+        },
+    )
+    .map_err(fail)?;
+    report(realm, &out, *json, id)
 }
 
 fn rename(realm: &mut Realm, cli: &Cli) -> Result<()> {
@@ -556,153 +494,37 @@ fn rename(realm: &mut Realm, cli: &Cli) -> Result<()> {
     let Some(new_title) = title else {
         bail!("missing required `--title` argument");
     };
-    if !realm.nodes.contains_key(id) {
-        bail!("no such node `{id}`");
-    }
-    let outcome = realm.rename_node(id, new_title)?;
-    commit(realm)?;
-    if outcome.title_changed || outcome.file_renamed {
-        let mut parts: Vec<&str> = Vec::new();
-        if outcome.title_changed {
-            parts.push("title");
-        }
-        if outcome.file_renamed {
-            parts.push("file slug");
-        }
-        println!("renamed {id} ({}): {}", parts.join(" + "), outcome.new_name);
-    } else {
-        println!("no change for {id} (title and slug already match)");
-    }
-    if *json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&node_json(realm, id).unwrap())?
-        );
-    }
-    Ok(())
+    let out = ops::rename(realm, id, new_title).map_err(fail)?;
+    report(realm, &out, *json, id)
 }
 
 fn wrap(realm: &mut Realm, cli: &Cli) -> Result<()> {
     let Command::Wrap { id, title, json } = &cli.command else {
         unreachable!()
     };
-    let Some(target) = realm.nodes.get(id).map(|f| f.node.clone()) else {
-        bail!("no such node `{id}`");
-    };
-    if target.kind == NodeKind::Card {
-        bail!("`{id}` is already a Card; wrap only applies to Action, Guard or Idea nodes");
-    }
-    let card_title = title
-        .clone()
-        .unwrap_or_else(|| format!("{} (Group)", target.title));
-    let now = utc_now_rfc3339();
-    let card = Node {
-        id: String::new(),
-        kind: NodeKind::Card,
-        title: card_title.clone(),
-        status: Status::Unstarted,
-        priority: target.priority,
-        disciplines: target.disciplines.clone(),
-        epics: target.epics.clone(),
-        quest_points: None,
-        landmark: target.landmark.clone(),
-        parent: target.parent.clone(),
-        blocked_by: vec![],
-        created_at: Some(now),
-        completed_at: None,
-        tags: vec![],
-    };
-    let mut card_file = NodeFile {
-        node: card,
-        body: kind_prefix_body(NodeKind::Card).to_string(),
-    };
-    let new_id = generate_unique(NodeKind::Card, |candidate| {
-        realm.nodes.contains_key(candidate)
-    });
-    card_file.node.id = new_id.to_string();
-    let path = realm.create_node_file(card_file, &slugify_title(&card_title))?;
-    // Reparent target under the new card.
-    {
-        let f = realm.nodes.get_mut(id).unwrap();
-        f.node.parent = Some(new_id.to_string());
-    }
-    write_nodes(realm, std::slice::from_ref(id))?;
-    commit(realm)?;
-    println!(
-        "wrapped {} under new card {} → {}",
-        id,
-        new_id,
-        path.display()
-    );
-    if *json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&node_json(realm, &new_id.to_string()).unwrap())?
-        );
-    }
-    Ok(())
+    let out = ops::wrap(realm, id, title.clone()).map_err(fail)?;
+    let new_id = out.created[0].clone();
+    report(realm, &out, *json, &new_id)
 }
 
 fn reparent(realm: &mut Realm, cli: &Cli) -> Result<()> {
     let Command::Reparent { id, parent, json } = &cli.command else {
         unreachable!()
     };
-    if !realm.nodes.contains_key(id) {
-        bail!("no such node `{id}`");
-    }
-    if let Some(p) = parent {
-        if p == id {
-            bail!("a node cannot be its own parent");
-        }
-        if !realm.nodes.contains_key(p) {
-            bail!("unknown parent `{p}`");
-        }
-        let extra = vec![(id.clone(), p.clone())];
-        if dag::would_create_cycle(&realm.node_map(), &extra) {
-            bail!("CycleDetectedError: reparenting {id} under {p} would close a cycle");
-        }
-    }
-    let f = realm.nodes.get_mut(id).unwrap();
-    f.node.parent = parent.clone();
-    write_nodes(realm, std::slice::from_ref(id))?;
-    commit(realm)?;
-    println!(
-        "reparented {id} → {}",
-        parent.as_deref().unwrap_or("root (parent: null)")
-    );
-    if *json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&node_json(realm, id).unwrap())?
-        );
-    }
-    Ok(())
+    let out = ops::reparent(realm, id, parent.clone()).map_err(fail)?;
+    report(realm, &out, *json, id)
 }
 
 fn delete(realm: &mut Realm, cli: &Cli) -> Result<()> {
     let Command::Delete { id, recursive } = &cli.command else {
         unreachable!()
     };
-    if !realm.nodes.contains_key(id) {
-        bail!("no such node `{id}`");
-    }
-    let descendants = dag::descendants_ids(&realm.node_map(), id);
-    if !descendants.is_empty() && !*recursive {
-        bail!(
-            "node {id} has {} descendant(s). Use --recursive to delete the whole subgraph.",
-            descendants.len()
-        );
-    }
-    let mut doomed = vec![id.clone()];
-    doomed.extend(descendants);
-    let affected = realm.delete_ids(&doomed);
-    write_nodes(realm, &affected)?;
-    commit(realm)?;
+    let out = ops::delete(realm, id, *recursive).map_err(fail)?;
     println!(
         "deleted {} ({} node(s)); stripped {} dangling blocked_by reference(s)",
         id,
-        doomed.len(),
-        affected.len()
+        out.deleted.len(),
+        out.references_stripped.len()
     );
     Ok(())
 }
@@ -714,33 +536,23 @@ fn index_sync(realm: &mut Realm) -> Result<bool> {
     for w in &realm.warnings {
         eprintln!("warning: {w}");
     }
-    realm.recompute();
-    realm.sync_index()?;
+    let issues = ops::index_sync(realm)?;
     println!(
         "indexed {} node(s) → {}",
         realm.nodes.len(),
         realm.legend_dir.join("index.json").display()
     );
-    let sorted = realm.sorted_ids();
-    let errors: Vec<String> = sorted
-        .iter()
-        .filter(|i| realm.computed[*i].validation_error.is_some())
-        .cloned()
-        .collect();
-    if errors.is_empty() {
+    if issues.is_empty() {
         println!("validation: OK");
         return Ok(true);
     }
-    println!("validation: {} node(s) with issues", errors.len());
-    for id in errors {
+    println!("validation: {} node(s) with issues", issues.len());
+    for (id, suggestions) in &issues {
         println!(
             "  {id}: {}",
-            realm.computed[&id]
-                .validation_error
-                .as_deref()
-                .unwrap_or("")
+            realm.computed[id].validation_error.as_deref().unwrap_or("")
         );
-        for suggestion in realm.suggestions_for(&id) {
+        for suggestion in suggestions {
             println!("    fix: {suggestion}");
         }
     }

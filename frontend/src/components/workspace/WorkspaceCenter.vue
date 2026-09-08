@@ -5,6 +5,9 @@
 import { onBeforeUnmount, ref } from 'vue'
 import type { NodeView } from '../../types'
 import type { CheckRow, FilterModel } from '../../lib/filters'
+import type { OverlayMode } from '../../lib/overlay'
+import type { CompletionLevel } from '../../lib/node'
+import type { GraphScope } from './graph/scene'
 import GraphPane from './graph/GraphPane.vue'
 import TablePane from './TablePane.vue'
 
@@ -18,6 +21,9 @@ defineProps<{
   statusCounts: CheckRow[]
   showGraph: boolean
   showTable: boolean
+  overlayMode: OverlayMode
+  scope: GraphScope
+  completionLevel: CompletionLevel
 }>()
 
 const emit = defineEmits<{
@@ -28,6 +34,10 @@ const emit = defineEmits<{
   openFilters: []
   clearFilters: []
   focusSearch: []
+  reparent: [childId: string, parentId: string]
+  'update:overlayMode': [mode: OverlayMode]
+  'update:scope': [scope: GraphScope]
+  'update:completionLevel': [level: CompletionLevel]
 }>()
 
 const ratio = ref(0.56)
@@ -77,7 +87,14 @@ onBeforeUnmount(() => {
         :selected-id="selectedId"
         :is-mock-scene="isMockScene"
         :realm-name="realmName"
+        :overlay-mode="overlayMode"
+        :scope="scope"
+        :completion-level="completionLevel"
         @select="emit('select', $event)"
+        @reparent="(childId, parentId) => emit('reparent', childId, parentId)"
+        @update:overlay-mode="emit('update:overlayMode', $event)"
+        @update:scope="emit('update:scope', $event)"
+        @update:completion-level="emit('update:completionLevel', $event)"
       />
       <button
         v-if="showTable"

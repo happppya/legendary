@@ -7,16 +7,18 @@ import {
   PhLightning,
   PhShieldCheck,
   PhSquaresFour,
+  PhTreeStructure,
 } from '@phosphor-icons/vue'
 import type { NodeView } from '../types'
 
 export type Kind = NodeView['kind']
 
 /** Kind keys in canonical display order. */
-export const KINDS: readonly Kind[] = ['card', 'action', 'guard', 'idea']
+export const KINDS: readonly Kind[] = ['card', 'genre', 'action', 'guard', 'idea']
 
 export const KIND_ICON: Record<Kind, Component> = {
   card: PhSquaresFour,
+  genre: PhTreeStructure,
   action: PhLightning,
   guard: PhShieldCheck,
   idea: PhLightbulb,
@@ -24,17 +26,25 @@ export const KIND_ICON: Record<Kind, Component> = {
 
 export const KIND_LABEL: Record<Kind, string> = {
   card: 'Card',
+  genre: 'Genre',
   action: 'Action',
   guard: 'Guard',
   idea: 'Idea',
 }
 
-/** Sort rank: card → action → guard → idea. */
+/** Sort rank: card → genre → action → guard → idea. */
 export const KIND_RANK: Record<Kind, number> = {
   card: 0,
-  action: 1,
-  guard: 2,
-  idea: 3,
+  genre: 1,
+  action: 2,
+  guard: 3,
+  idea: 4,
+}
+
+/** Container kinds: structural groups that hold subgraphs and aggregate
+ * descendant QP. Non-containers are leaf task kinds. */
+export function isContainerKind(kind: string): boolean {
+  return kind === 'card' || kind === 'genre'
 }
 
 export function kindOf(n: Pick<NodeView, 'kind'>): Kind {

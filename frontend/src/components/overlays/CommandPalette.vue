@@ -46,9 +46,22 @@ const results = computed<Result[]>(() => {
     out.push({ kind: 'header', id: 'h-commands', title: 'Commands' })
     for (const c of cmds) out.push({ kind: 'command', id: c.id, title: c.title, hint: c.hint })
   }
-  const nodes = props.nodes.filter(
-    (n) => !q || n.title.toLowerCase().includes(q) || n.id.toLowerCase().includes(q),
-  )
+  // Fuzzy search (doc 05 §5.7): node IDs, titles, tags, Epics, Landmarks
+  // and Discipline string paths all match.
+  const nodes = props.nodes.filter((n) => {
+    if (!q) return true
+    const hay = [
+      n.title,
+      n.id,
+      ...n.tags.map((t) => `#${t}`),
+      ...n.epics,
+      ...n.disciplines,
+      n.landmark ?? '',
+    ]
+      .join(' ')
+      .toLowerCase()
+    return hay.includes(q)
+  })
   if (nodes.length) {
     out.push({ kind: 'header', id: 'h-nodes', title: nodes.length === props.nodes.length ? 'Nodes' : `Nodes · ${nodes.length}` })
     for (const n of nodes) out.push({ kind: 'node', id: n.id, title: n.title, hint: n.id, node: n })
@@ -291,6 +304,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .kind-tile.card {
   background: var(--kind-card);
+}
+
+.kind-tile.genre {
+  background: var(--kind-genre);
 }
 
 .kind-tile.action {

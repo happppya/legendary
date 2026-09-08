@@ -9,6 +9,13 @@ description = "Legendary desktop shell (Tauri v2) — wraps legend_core + the Vu
 name = "legendary_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# Tauri v2 switches between dev mode (loads `devUrl`) and bundled mode
+# (loads `frontendDist`) via this feature. `cargo run -p legendary-desktop`
+# = dev renderer on :5173; `--features custom-protocol` = production dist.
+# See scripts/dev-desktop.sh and scripts/preview-desktop.sh.
+custom-protocol = ["tauri/custom-protocol"]
+
 [build-dependencies]
 tauri-build = { workspace = true }
 
@@ -17,3 +24,4 @@ tauri = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 legend_core = { path = "../crates/legend_core" }
+notify = "6"

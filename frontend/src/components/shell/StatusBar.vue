@@ -9,6 +9,8 @@ const props = defineProps<{
   links: number
   realmName: string
   isMock: boolean
+  /** True when mutations are available (desktop shell + live realm). */
+  live: boolean
   error: string
 }>()
 
@@ -29,10 +31,14 @@ const nodeWord = computed(() => (props.nodes === 1 ? 'node' : 'nodes'))
       <span
         v-if="isMock"
         class="sb-save"
-        title="The demo scene is read-only — real autosave ships with the editor milestone"
+        title="The demo scene is read-only — open a real realm to edit it"
       >
         <span class="dot" aria-hidden="true"></span>
-        Auto-saved 2m ago
+        demo scene
+      </span>
+      <span v-else-if="live" class="sb-save" title="Edits write through to the realm's node files and index">
+        <span class="dot" aria-hidden="true"></span>
+        live · {{ realmName }}
       </span>
       <span v-else class="sb-env mono">
         <span class="dot muted" aria-hidden="true"></span>

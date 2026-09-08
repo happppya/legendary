@@ -33,35 +33,35 @@ Selecting any node opens a split workspace designed for focused context and loca
 +------------------------------------+------------------------------------+
 ```
 
-- [ ] **Left Panel (Focused Node Workspace):** Renders the item title at the top, followed directly by the editable Markdown body context and goal notes. The side metadata panel provides dedicated controls to edit all attached ECS components.
+- [x] **Left Panel (Focused Node Workspace):** Renders the item title at the top, followed directly by the editable Markdown body context and goal notes. The side metadata panel provides dedicated controls to edit all attached ECS components.
 
-- [ ] **Right Panel (Interactive Local Graph View):** Focuses on the selected node as the active center point within its immediate graph.
+- [x] **Right Panel (Interactive Local Graph View):** Focuses on the selected node as the active center point within its immediate graph.
 
 ### 5.2. Graph Node Shapes & Visual Hierarchy Rules
 
-- [ ] **Actions (Compact Horizontal Pills / Capsules):** Executable Action nodes render as **solid-bordered compact horizontal pill or capsule shapes** for optimal title legibility and clean link routing.
+- [x] **Actions (Compact Horizontal Pills / Capsules):** Executable Action nodes render as **solid-bordered compact horizontal pill or capsule shapes** for optimal title legibility and clean link routing.
 
-- [ ] **Guards (Small Diamonds):** Quality gate Guard nodes render as **compact diamonds (45-degree tilted squares)** with distinct high-contrast borders.
+- [x] **Guards (Small Diamonds):** Quality gate Guard nodes render as **compact diamonds (45-degree tilted squares)** with distinct high-contrast borders.
 
-- [ ] **Ideas (Dashed-Border Pills / Soft Capsules):** Speculative Idea nodes render as **dashed-border pills or soft-accent capsules** with subtle pitch styling to distinguish creative pitches from executable task items.
+- [x] **Ideas (Dashed-Border Pills / Soft Capsules):** Speculative Idea nodes render as **dashed-border pills or soft-accent capsules** with subtle pitch styling to distinguish creative pitches from executable task items.
 
-- [ ] **Cards (Symmetrical Squares):** Container Card nodes render as **symmetrical squares**. Squares display the Card ID, aggregated Quest Points ($QP_{\text{Card}}$), a progress ring representing completed child actions, and a visual dependency indicator showing the percentage of $QP$ currently locked behind blocked prerequisites.
+- [x] **Cards (Symmetrical Squares):** Container Card nodes render as **symmetrical squares**. Squares display the Card ID, aggregated Quest Points ($QP_{\text{Card}}$), a progress ring representing completed child actions, and a visual dependency indicator showing the percentage of $QP$ currently locked behind blocked prerequisites.
 
 ### 5.3. Visual Emphasis & Dynamic Highlight Engine
 
-- [ ] **Depth-Based Scale & Emphasis (Default Hierarchy):** Top-level Cards and root-level nodes receive greater visual scale and stroke weight. Deeper sub-actions scale down proportionally.
+- [x] **Depth-Based Scale & Emphasis (Default Hierarchy):** Top-level Cards and root-level nodes receive greater visual scale and stroke weight. Deeper sub-actions scale down proportionally.
 
-- [ ] **Toggleable Color & Highlight Overlay Modes (`C E`, `C D`, `C P`, `C S`):**
+- [x] **Toggleable Color & Highlight Overlay Modes (`C E`, `C D`, `C P`, `C S`):**
 
-    - [ ] **Color by Epic:** Colors nodes based on associated Epic branches.
+    - [x] **Color by Epic:** Colors nodes based on associated Epic branches.
 
-    - [ ] **Color by Discipline:** Color-codes nodes according to Discipline branches.
+    - [x] **Color by Discipline:** Color-codes nodes according to Discipline branches.
 
-    - [ ] **Color by Priority:** Scales visual weight and warmth (`critical` > `high` > `medium` > `low`).
+    - [x] **Color by Priority:** Scales visual weight and warmth (`critical` > `high` > `medium` > `low`).
 
-    - [ ] **Color by Lifecycle / Status:** Highlights runtime-blocked tasks in warning red/amber, active tasks in blue, and vanquished tasks in muted grays.
+    - [x] **Color by Lifecycle / Status:** Highlights runtime-blocked tasks in warning red/amber, active tasks in blue, and vanquished tasks in muted grays.
 
-    - [ ] **Effort Mode:** Heatmaps node contrast according to estimation scores ($QP$).
+    - [x] **Effort Mode:** Heatmaps node contrast according to estimation scores ($QP$).
 
 ### 5.4. Discipline & Epic Tree Navigators
 
@@ -96,24 +96,24 @@ All top-level Card nodes branch directly from a single, neutral **`[ Realm Origi
 
 #### B. Granular Completed Task Visibility Engine (3-Level Toggle)
 
-- [ ] **`Hide All Completed` (Level 0):** Hides every vanquished Action, Guard, Idea, and Card across the canvas.
+- [x] **`Hide All Completed` (Level 0):** Hides every vanquished Action, Guard, Idea, and Card across the canvas.
 
-- [ ] **`Hide Completed Subgraphs Only` (Level 1):** Hides top-level Cards ONLY if **100% of their descendant nodes are vanquished**. Partially completed Card subgraphs remain visible.
+- [x] **`Hide Completed Subgraphs Only` (Level 1):** Hides top-level Cards ONLY if **100% of their descendant nodes are vanquished**. Partially completed Card subgraphs remain visible.
 
-- [ ] **`Show All Completed` (Level 2):** Displays all vanquished tasks, completed Card trees, and active tasks across the entire graph.
+- [x] **`Show All Completed` (Level 2):** Displays all vanquished tasks, completed Card trees, and active tasks across the entire graph.
 
 ### 5.6. The Landmark Matrix (Kanban & Domain View)
 
-- [ ] **Kanban Mode:** Status columns (`Unstarted`, `Active`, `Blocked`, `Vanquished`) displaying Action, Guard, and Idea nodes grouped by their effective (explicit or inherited) Landmark.
+- [x] **Kanban Mode:** Status columns (`Unstarted`, `Active`, `Blocked`, `Vanquished`) displaying Action, Guard, and Idea nodes grouped by their effective (explicit or inherited) Landmark.
 
-- [ ] **Domain Swimlanes:** Matrix view crossing Disciplines or Epics with Status columns.
+- [x] **Domain Swimlanes:** Matrix view crossing Disciplines or Epics with Status columns.
 
 ### 5.7. Command Palette & Keyboard-First Workflows
 
 Modal Command Palette accessible globally via `Cmd+K` / `Ctrl+K` or `/`.
 
-- [ ] **Fuzzy Search:** Real-time search matching Node IDs (`ACT-3X7P`, `IDEA-5T2P`), titles, tags, Epics, Landmarks, and Discipline string paths.
+- [x] **Fuzzy Search:** Real-time search matching Node IDs (`ACT-3X7P`, `IDEA-5T2P`), titles, tags, Epics, Landmarks, and Discipline string paths.
 
-- [ ] **Contextual Graph Actions:** `Ctrl+Shift+W` (wrap/promote), `Ctrl+M` (re-parent), `Ctrl+Enter` (vanquish), `Ctrl+L` (link dependency), `Ctrl+Q` (set QP).
+- [x] **Contextual Graph Actions:** `Ctrl+Shift+W` (wrap/promote), `Ctrl+M` (re-parent), `Ctrl+Enter` (vanquish), `Ctrl+L` (link dependency), `Ctrl+Q` (set QP).
 
-- [ ] **Overlay Toggles:** `C E` (Epic), `C D` (Discipline), `C P` (Priority), `C S` (Status).
+- [x] **Overlay Toggles:** `C E` (Epic), `C D` (Discipline), `C P` (Priority), `C S` (Status).

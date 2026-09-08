@@ -5,7 +5,7 @@
 
 export interface NodeView {
   id: string
-  kind: 'card' | 'action' | 'guard' | 'idea'
+  kind: 'card' | 'genre' | 'action' | 'guard' | 'idea'
   title: string
   status: 'unstarted' | 'active' | 'vanquished'
   /** Computed at runtime: unstarted | active | vanquished | blocked */
@@ -35,6 +35,24 @@ export interface RealmPayload {
   nodeCount: number
   warnings: string[]
   nodes: NodeView[]
+}
+
+/** Response of every desktop mutation command: fresh snapshot + summary. */
+export interface MutationPayload {
+  realm: RealmPayload
+  message: string
+}
+
+/** Per-node validation issues from `index_sync`. */
+export interface SyncIssue {
+  id: string
+  suggestions: string[]
+}
+
+/** Response of the desktop `index_sync` command. */
+export interface SyncPayload {
+  realm: RealmPayload
+  issues: SyncIssue[]
 }
 
 export interface TreeRow {

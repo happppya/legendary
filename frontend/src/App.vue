@@ -26,13 +26,29 @@ import NodeDetail from './components/workspace/detail/NodeDetail.vue'
 import BoardView from './components/pages/BoardView.vue'
 import CalendarView from './components/pages/CalendarView.vue'
 import EntitiesView from './components/pages/EntitiesView.vue'
+import LandmarkMatrix from './components/pages/LandmarkMatrix.vue'
 import SettingsView from './components/pages/SettingsView.vue'
 import CommandPalette, { type PaletteCommand } from './components/overlays/CommandPalette.vue'
 import AboutDialog from './components/overlays/AboutDialog.vue'
 import OpenRealmDialog from './components/overlays/OpenRealmDialog.vue'
 import NewRealmDialog from './components/overlays/NewRealmDialog.vue'
-import { inDesktop, openRealm } from './api'
-import type { NodeView } from './types'
+import MutationDialog, { type MutationRequest } from './components/overlays/MutationDialog.vue'
+import MoveToDialog from './components/overlays/MoveToDialog.vue'
+import {
+  deleteNode,
+  inDesktop,
+  onRealmChanged,
+  openRealm,
+  renameNode,
+  reparentNode,
+  setNodeBody,
+  updateNodeComponents,
+  updateNodeStatus,
+  wrapNode,
+} from './api'
+import type { MetaEdits } from './components/workspace/detail/NodeMetaEditor.vue'
+import { isContainerKind } from './lib/kind'
+import type { MutationPayload as MutationPayloadLike, NodeView, RealmPayload } from './types'
 import type { CheckRow, FilterModel, TaxRow } from './lib/filters'
 import {
   disciplineRows,
@@ -45,10 +61,12 @@ import {
   statusRows,
   taxTree,
 } from './lib/filters'
-import { linkCount } from './lib/node'
+import { linkCount, type CompletionLevel } from './lib/node'
+import type { OverlayMode } from './lib/overlay'
+import type { GraphScope } from './components/workspace/graph/scene'
 import { MOCK_BY_KEY, MOCK_NODES, MOCK_REALM } from './lib/mockRealm'
 
-type Page = 'workspace' | 'board' | 'entities' | 'calendar' | 'settings'
+type Page = 'workspace' | 'board' | 'entities' | 'calendar' | 'matrix' | 'settings'
 
 /* ---- theme ------------------------------------------------------------- */
 
@@ -90,6 +108,7 @@ const realmName = computed(() => {
 const totals = computed(() => ({ nodes: nodes.value.length, links: linkCount(nodes.value) }))
 
 const isMockScene = computed(() => source.value === 'mock')
+const canMutateAny = computed(() => isDesktop.value && source.value === 'realm')
 
 /* ---- selection ------------------------------------------------------------ */
 
@@ -151,6 +170,23 @@ const priorityRowsC = computed<CheckRow[]>(() => priorityRows(nodes.value))
 const epicRowsC = computed<CheckRow[]>(() => epicRows(nodes.value))
 const disciplineRowsC = computed<CheckRow[]>(() => disciplineRows(nodes.value))
 const landmarkRowsC = computed<CheckRow[]>(() => landmarkRows(nodes.value))
+
+/* ---- editor vocabulary (metadata editor pickers) ------------------------- */
+
+const disciplineOptionsC = computed(() =>
+  (source.value === 'realm' ? taxTree('disciplines', nodes.value) : disciplineRowsC.value).map(
+    (r) => ({ key: r.key, label: r.label }),
+  ),
+)
+const epicOptionsC = computed(() =>
+  (source.value === 'realm' ? taxTree('epics', nodes.value) : epicRowsC.value).map((r) => ({
+    key: r.key,
+    label: r.label,
+  })),
+)
+const landmarkOptionsC = computed(() =>
+  landmarkRowsC.value.map((r) => ({ key: r.key, label: r.label })),
+)
 // Taxonomy *trees* (.legend/taxonomy.yaml vocabulary) exist only for real
 // realms opened from disk; the mock realm keeps its flat branch rows.
 const epicTreeC = computed<TaxRow[] | null>(() =>
@@ -165,6 +201,13 @@ const disciplineTreeC = computed<TaxRow[] | null>(() =>
 const page = ref<Page>('workspace')
 const showGraph = ref(true)
 const showTable = ref(true)
+
+/* ---- graph overlays + scope (doc 05 §5.3/§5.5, test-feedback A-1) -------- */
+
+const overlayMode = ref<OverlayMode>('none')
+/** Graph scope: local neighbourhood, whole realm, or genre overview. */
+const graphScope = ref<GraphScope>('local')
+const completionLevel = ref<CompletionLevel>(2)
 /** Last view chosen in the explorer list (workspace highlights as one row). */
 const navChoice = ref<'workspace' | 'graph' | 'table'>('graph')
 
@@ -194,6 +237,9 @@ function openView(id: string) {
       break
     case 'board':
       page.value = 'board'
+      break
+    case 'matrix':
+      page.value = 'matrix'
       break
     case 'calendar':
       page.value = 'calendar'
@@ -296,6 +342,18 @@ function useMockRealm() {
   clearFilters()
   selectedId.value = MOCK_BY_KEY.get('cmc')?.id ?? null
   error.value = ''
+  mutationError.value = ''
+}
+
+/** Swap in a fresh snapshot from any mutation response, preserving the
+ * selection when the node survived the write. */
+function applySnapshot(realm: RealmPayload) {
+  source.value = 'realm'
+  realmPath.value = realm.root
+  nodes.value = realm.nodes
+  if (!selectedId.value || !realm.nodes.some((n) => n.id === selectedId.value)) {
+    selectedId.value = realm.nodes[0]?.id ?? null
+  }
 }
 
 async function openRealRealm(path: string): Promise<boolean> {
@@ -321,10 +379,192 @@ async function reloadRealm() {
   await openRealRealm(realmPath.value)
 }
 
+/* ---- external edits (desktop file watcher, spec §4.2) -------------------- */
+
+let unlistenRealmChanged: (() => void) | null = null
+
+onMounted(async () => {
+  unlistenRealmChanged = await onRealmChanged(() => {
+    if (source.value === 'realm') {
+      // Debounced upstream; keep selection when the node still exists.
+      void reloadRealm()
+    }
+  })
+})
+
+onBeforeUnmount(() => {
+  unlistenRealmChanged?.()
+  unlistenRealmChanged = null
+})
+
 /* ---- dialogs ------------------------------------------------------------- */
 
 type Dialog = 'open' | 'new' | 'about' | null
 const dialog = ref<Dialog>(null)
+
+/* ---- mutations (doc 04 §4.3/§4.5 UI actions) ------------------------------ */
+
+/** Pending confirmation dialog (vanquish cascade / recursive delete). */
+const mutationRequest = ref<MutationRequest | null>(null)
+const mutationBusy = ref(false)
+/** Last engine rejection, surfaced in the status bar like CLI stderr. */
+const mutationError = ref('')
+
+function descendantsOf(id: string): NodeView[] {
+  const out: NodeView[] = []
+  const stack = [id]
+  while (stack.length) {
+    const cur = stack.pop()
+    for (const n of nodes.value) {
+      if (n.parent === cur) {
+        out.push(n)
+        stack.push(n.id)
+      }
+    }
+  }
+  return out
+}
+
+/** Unvanquished leaf tasks under a Card (engine's cascade count). */
+function unvanquishedLeaves(card: NodeView): number {
+  return descendantsOf(card.id).filter(
+    (n) => !isContainerKind(n.kind) && n.effectiveStatus !== 'vanquished',
+  ).length
+}
+
+/** Vanquish entry point: a Card with unvanquished leaves opens the prompt
+ * (doc 04 §4.3); anything else vanquishes right away. */
+function requestVanquish(node: NodeView) {
+  mutationError.value = ''
+  if (isContainerKind(node.kind) && unvanquishedLeaves(node) > 0) {
+    mutationRequest.value = { flavour: 'vanquish', node, count: unvanquishedLeaves(node) }
+    return
+  }
+  void runMutation(() => updateNodeStatus(node.id, 'vanquished'))
+}
+
+/** Delete entry point: a container with children opens the doc 04 §4.5
+ * warning modal; leaves delete immediately (still reversible via Git). */
+function requestDelete(node: NodeView) {
+  mutationError.value = ''
+  const kids = descendantsOf(node.id)
+  if (kids.length > 0) {
+    mutationRequest.value = {
+      flavour: 'delete',
+      node,
+      count: kids.length + 1,
+      notes: [`+ ${kids.length} descendant ${kids.length === 1 ? 'node' : 'nodes'} in the subgraph`],
+    }
+    return
+  }
+  void runMutation(() => deleteNode(node.id, false))
+}
+
+async function runMutation(fn: () => Promise<MutationPayloadLike>): Promise<void> {
+  mutationBusy.value = true
+  try {
+    const out = await fn()
+    applySnapshot(out.realm)
+    mutationError.value = ''
+  } catch (err) {
+    mutationError.value = String(err)
+  } finally {
+    mutationBusy.value = false
+  }
+}
+
+function confirmMutation() {
+  const req = mutationRequest.value
+  if (!req) return
+  mutationRequest.value = null
+  if (req.flavour === 'vanquish') {
+    void runMutation(() => updateNodeStatus(req.node.id, 'vanquished', true))
+  } else {
+    void runMutation(() => deleteNode(req.node.id, true))
+  }
+}
+
+function onWrap() {
+  const n = selected.value
+  if (n) void runMutation(() => wrapNode(n.id))
+}
+
+function onReparentRoot() {
+  const n = selected.value
+  if (n) void runMutation(() => reparentNode(n.id, null))
+}
+
+/* ---- focused-node workspace editors (doc 05 §5.1) ----------------------- */
+
+/** Status set from the editor segment. A Card → vanquished with unvanquished
+ * leaves is routed through the cascade confirmation (doc 04 §4.3). */
+function onSetStatus(status: 'unstarted' | 'active' | 'vanquished') {
+  const n = selected.value
+  if (!n || n.status === status) return
+  if (isContainerKind(n.kind) && status === 'vanquished' && unvanquishedLeaves(n) > 0) {
+    requestVanquish(n)
+    return
+  }
+  void runMutation(() => updateNodeStatus(n.id, status))
+}
+
+function onSaveTitle(title: string) {
+  const n = selected.value
+  if (!n || title === n.title) return
+  void runMutation(() => renameNode(n.id, title))
+}
+
+function onSaveBody(body: string) {
+  const n = selected.value
+  if (!n || body === n.body) return
+  void runMutation(() => setNodeBody(n.id, body))
+}
+
+/** Metadata editor save: component edits in one engine write. The editor's
+ * exposed dirty flag lets the template disable Save. */
+function onSaveMeta(edits: MetaEdits) {
+  const n = selected.value
+  if (!n) return
+  void runMutation(() =>
+    updateNodeComponents({
+      id: n.id,
+      priority: edits.priority,
+      questPoints: edits.questPoints,
+      clearQuestPoints: edits.clearQuestPoints,
+      disciplines: edits.disciplines,
+      epics: edits.epics,
+      landmark: edits.landmark,
+      clearLandmark: edits.clearLandmark,
+      blockedBy: edits.blockedBy,
+    }),
+  )
+}
+
+/* ---- move subgraph (doc 04 §4.5 Batch Re-parenting Action) ---------------- */
+
+/** Open when non-null; a 'graph:<id>' payload means a graph drop reparent. */
+const moveToRequest = ref<{ node: NodeView } | null>(null)
+
+function requestMoveSubgraph(node: NodeView) {
+  mutationError.value = ''
+  moveToRequest.value = { node }
+}
+
+function confirmMoveTo(parent: string | null) {
+  const req = moveToRequest.value
+  moveToRequest.value = null
+  if (!req) return
+  void runMutation(() => reparentNode(req.node.id, parent))
+}
+
+/** Drop a dragged graph node onto another node: reparent through the same
+ * dialog-free path (the engine still cycle-checks). */
+function onGraphDropReparent(childId: string, parentId: string) {
+  const child = nodesById.value.get(childId)
+  if (!child || child.parent === parentId) return
+  mutationError.value = ''
+  void runMutation(() => reparentNode(childId, parentId))
+}
 const openPath = ref('examples/realm-demo')
 const dialogError = ref('')
 const openBusy = ref(false)
@@ -358,9 +598,30 @@ const paletteCommands = computed<PaletteCommand[]>(() => {
     out.push({ id: 'mock.restore', title: 'Demo realm', hint: 'mock scene' })
   }
   out.push({ id: 'edit.copyid', title: 'Copy node ID', hint: selected.value?.id })
+  if (canMutateAny.value) {
+    out.push({
+      id: 'node.move',
+      title: 'Move Subgraph To…',
+      hint: selected.value ? `move ${selected.value.id} under another Card` : undefined,
+    })
+  }
+  out.push({ id: 'graph.overlay.none', title: 'Overlay: Color by Kind' })
+  out.push({ id: 'graph.overlay.epic', title: 'Overlay: Color by Epic', hint: 'C E' })
+  out.push({ id: 'graph.overlay.discipline', title: 'Overlay: Color by Discipline', hint: 'C D' })
+  out.push({ id: 'graph.overlay.priority', title: 'Overlay: Color by Priority', hint: 'C P' })
+  out.push({ id: 'graph.overlay.status', title: 'Overlay: Color by Status', hint: 'C S' })
+  out.push({ id: 'graph.overlay.effort', title: 'Overlay: Effort (QP heatmap)' })
+  out.push({ id: 'graph.scope.local', title: 'Graph: Local neighbourhood' })
+  out.push({ id: 'graph.scope.global', title: 'Graph: Global (whole realm)', hint: 'Feature A-a' })
+  out.push({ id: 'graph.scope.overview', title: 'Graph: Genre overview', hint: 'Feature A-b' })
+  if (canMutateAny.value) {
+    out.push({ id: 'node.vanquish', title: 'Vanquish node', hint: 'Ctrl+Enter' })
+    out.push({ id: 'node.wrapshortcut', title: 'Wrap in Card Group', hint: 'Ctrl+Shift+W' })
+  }
   out.push({ id: 'view.workspace', title: 'Open Explorer workspace' })
   out.push({ id: 'view.table', title: 'Switch to Table View' })
   out.push({ id: 'view.board', title: 'Switch to Board View' })
+  out.push({ id: 'view.matrix', title: 'Open Landmark Matrix' })
   out.push({ id: 'view.calendar', title: 'Open Calendar' })
   out.push({ id: 'view.settings', title: 'Open Settings' })
   out.push({ id: 'tools.clearfilters', title: 'Clear filters' })
@@ -454,6 +715,7 @@ const menus = computed<MenuSpec[]>(() => {
     { key: 'graph', label: 'Graph View' },
     { key: 'table', label: 'Table View' },
     { key: 'board', label: 'Board View' },
+    { key: 'matrix', label: 'Landmark Matrix' },
     { key: 'calendar', label: 'Calendar' },
     { key: 'entities', label: 'Entities' },
   ]
@@ -501,12 +763,17 @@ const menus = computed<MenuSpec[]>(() => {
     id: 'graph',
     label: 'Graph',
     items: [
-      { id: 'graph.overlay.kind', label: 'Color by Kind', checked: true },
-      { id: 'graph.overlay.epic', label: 'Color by Epic', disabled: true, title: 'Epic overlay lands with the graph milestone' },
-      { id: 'graph.overlay.discipline', label: 'Color by Discipline', disabled: true },
-      { id: 'graph.overlay.priority', label: 'Color by Priority', disabled: true },
-      { id: 'graph.overlay.status', label: 'Color by Status', disabled: true },
+      { id: 'graph.overlay.none', label: 'Color by Kind', checked: overlayMode.value === 'none' },
+      { id: 'graph.overlay.epic', label: 'Color by Epic', checked: overlayMode.value === 'epic', accel: 'C E' },
+      { id: 'graph.overlay.discipline', label: 'Color by Discipline', checked: overlayMode.value === 'discipline', accel: 'C D' },
+      { id: 'graph.overlay.priority', label: 'Color by Priority', checked: overlayMode.value === 'priority', accel: 'C P' },
+      { id: 'graph.overlay.status', label: 'Color by Status', checked: overlayMode.value === 'status', accel: 'C S' },
+      { id: 'graph.overlay.effort', label: 'Effort (QP heatmap)', checked: overlayMode.value === 'effort' },
       { separator: true, id: 's1' },
+      { id: 'graph.scope.local', label: 'Local Graph', checked: graphScope.value === 'local' },
+      { id: 'graph.scope.global', label: 'Global Graph (whole realm)', checked: graphScope.value === 'global' },
+      { id: 'graph.scope.overview', label: 'Genre Overview', checked: graphScope.value === 'overview' },
+      { separator: true, id: 's2' },
       { id: 'graph.autolayout', label: 'Auto-layout', checked: true, disabled: true },
       { id: 'graph.fit', label: 'Zoom to Fit', disabled: true },
     ],
@@ -582,6 +849,11 @@ async function runMenu(id: string) {
         await win.close()
       }
       break
+    case 'node.move': {
+      const n = selected.value
+      if (n) requestMoveSubgraph(n)
+      break
+    }
     case 'edit.copyid': {
       const n = selected.value
       if (n) {
@@ -608,6 +880,7 @@ async function runMenu(id: string) {
     case 'view.graph':
     case 'view.table':
     case 'view.board':
+    case 'view.matrix':
     case 'view.calendar':
     case 'view.entities':
     case 'view.settings': {
@@ -634,6 +907,47 @@ async function runMenu(id: string) {
         cur = root
       }
       if (root) select(root.id)
+      break
+    }
+    case 'graph.overlay.none':
+      overlayMode.value = 'none'
+      break
+    case 'graph.overlay.epic':
+      overlayMode.value = 'epic'
+      break
+    case 'graph.overlay.discipline':
+      overlayMode.value = 'discipline'
+      break
+    case 'graph.overlay.priority':
+      overlayMode.value = 'priority'
+      break
+    case 'graph.overlay.status':
+      overlayMode.value = 'status'
+      break
+    case 'graph.overlay.effort':
+      overlayMode.value = 'effort'
+      break
+    case 'graph.scope.local':
+      graphScope.value = 'local'
+      break
+    case 'graph.scope.global':
+      graphScope.value = 'global'
+      break
+    case 'graph.scope.overview':
+      graphScope.value = 'overview'
+      break
+    case 'node.vanquish': {
+      const n = selected.value
+      if (n) requestVanquish(n)
+      break
+    }
+    case 'node.wrapshortcut': {
+      onWrap()
+      break
+    }
+    case 'node.moveshortcut': {
+      const n = selected.value
+      if (n) requestMoveSubgraph(n)
       break
     }
     case 'window.fullscreen': {
@@ -685,7 +999,68 @@ function onGlobalKey(e: KeyboardEvent) {
     void reloadRealm()
     return
   }
+
+  // doc 05 §5.7 contextual graph actions (desktop mutation contexts only)
+  if (canMutateAny.value) {
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'w') {
+      e.preventDefault()
+      onWrap()
+      return
+    }
+    if (mod && e.key.toLowerCase() === 'm') {
+      e.preventDefault()
+      const n = selected.value
+      if (n) requestMoveSubgraph(n)
+      return
+    }
+    if (mod && e.key === 'Enter') {
+      e.preventDefault()
+      const n = selected.value
+      if (n) requestVanquish(n)
+      return
+    }
+  }
+
+  // doc 05 §5.7 overlay toggles: the two-key chord C then E/D/P/S
+  if (overlayChordArmed && !typing) {
+    const k = e.key.toLowerCase()
+    if (k === 'e') {
+      overlayMode.value = overlayMode.value === 'epic' ? 'none' : 'epic'
+      e.preventDefault()
+      overlayChordArmed = false
+      return
+    }
+    if (k === 'd') {
+      overlayMode.value = overlayMode.value === 'discipline' ? 'none' : 'discipline'
+      e.preventDefault()
+      overlayChordArmed = false
+      return
+    }
+    if (k === 'p') {
+      overlayMode.value = overlayMode.value === 'priority' ? 'none' : 'priority'
+      e.preventDefault()
+      overlayChordArmed = false
+      return
+    }
+    if (k === 's') {
+      overlayMode.value = overlayMode.value === 'status' ? 'none' : 'status'
+      e.preventDefault()
+      overlayChordArmed = false
+      return
+    }
+    overlayChordArmed = false
+  }
+  if (!typing && !mod && e.key.toLowerCase() === 'c') {
+    overlayChordArmed = true
+    // disarm if no follow-up key arrives within 1.2s
+    window.setTimeout(() => {
+      overlayChordArmed = false
+    }, 1200)
+  }
 }
+
+/** True while a `C` chord is waiting for its mode letter. */
+let overlayChordArmed = false
 
 onMounted(() => window.addEventListener('keydown', onGlobalKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
@@ -749,6 +1124,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
           :status-counts="statusRowsC"
           :show-graph="showGraph"
           :show-table="showTable"
+          :overlay-mode="overlayMode"
+          :scope="graphScope"
+          :completion-level="completionLevel"
           @select="select"
           @update:show-graph="showGraph = $event"
           @update:show-table="showTable = $event"
@@ -756,6 +1134,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
           @open-filters="filtersOpen = true; focusFilters()"
           @clear-filters="clearFilters"
           @focus-search="filtersOpen = true; focusFilters()"
+          @reparent="onGraphDropReparent"
+          @update:overlay-mode="overlayMode = $event"
+          @update:scope="graphScope = $event"
+          @update:completion-level="completionLevel = $event"
         />
 
         <aside class="inspector" aria-label="Detail inspector">
@@ -763,8 +1145,22 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
             :node="selected"
             :nodes-by-id="nodesById"
             :realm-name="realmName"
+            :can-mutate="isDesktop && source === 'realm'"
+            :busy="mutationBusy"
+            :discipline-options="disciplineOptionsC"
+            :epic-options="epicOptionsC"
+            :landmark-options="landmarkOptionsC"
             @select="select"
             @filter="onDetailFilter"
+            @vanquish="selected && requestVanquish(selected)"
+            @delete-subgraph="selected && requestDelete(selected)"
+            @wrap="onWrap"
+            @reparent-root="onReparentRoot"
+            @save-title="onSaveTitle"
+            @save-body="onSaveBody"
+            @set-status="onSetStatus"
+            @save-meta="onSaveMeta"
+            @move-subgraph="selected && requestMoveSubgraph(selected)"
           />
         </aside>
       </template>
@@ -793,6 +1189,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
           <template v-if="page === 'board'">
             <BoardView :nodes="filteredNodes" :selected-id="selectedId" @select="select" />
           </template>
+          <template v-else-if="page === 'matrix'">
+            <LandmarkMatrix :nodes="filteredNodes" :selected-id="selectedId" @select="select" />
+          </template>
           <template v-else-if="page === 'entities'">
             <EntitiesView :nodes="nodes" :kind-counts="kindRowsC" @browse="browseKind" />
           </template>
@@ -809,13 +1208,27 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
           </template>
         </main>
 
-        <aside v-if="page === 'board' || page === 'entities'" class="inspector" aria-label="Detail inspector">
+        <aside v-if="page === 'board' || page === 'matrix' || page === 'entities'" class="inspector" aria-label="Detail inspector">
           <NodeDetail
             :node="selected"
             :nodes-by-id="nodesById"
             :realm-name="realmName"
+            :can-mutate="isDesktop && source === 'realm'"
+            :busy="mutationBusy"
+            :discipline-options="disciplineOptionsC"
+            :epic-options="epicOptionsC"
+            :landmark-options="landmarkOptionsC"
             @select="select"
             @filter="onDetailFilter"
+            @vanquish="selected && requestVanquish(selected)"
+            @delete-subgraph="selected && requestDelete(selected)"
+            @wrap="onWrap"
+            @reparent-root="onReparentRoot"
+            @save-title="onSaveTitle"
+            @save-body="onSaveBody"
+            @set-status="onSetStatus"
+            @save-meta="onSaveMeta"
+            @move-subgraph="selected && requestMoveSubgraph(selected)"
           />
         </aside>
       </template>
@@ -826,7 +1239,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
       :links="totals.links"
       :realm-name="realmName"
       :is-mock="source === 'mock'"
-      :error="error"
+      :live="isDesktop && source === 'realm'"
+      :error="error || mutationError"
     />
 
     <!-- command palette -->
@@ -840,6 +1254,21 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
     />
 
     <!-- dialogs -->
+    <MutationDialog
+      v-if="mutationRequest"
+      :request="mutationRequest"
+      :busy="mutationBusy"
+      @close="mutationRequest = null"
+      @confirm="confirmMutation"
+    />
+    <MoveToDialog
+      v-if="moveToRequest"
+      :node="moveToRequest.node"
+      :nodes="nodes"
+      :busy="mutationBusy"
+      @close="moveToRequest = null"
+      @move="confirmMoveTo"
+    />
     <AboutDialog v-if="dialog === 'about'" :is-desktop="isDesktop" @close="dialog = null" />
     <OpenRealmDialog
       v-if="dialog === 'open'"

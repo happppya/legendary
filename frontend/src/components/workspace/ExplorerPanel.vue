@@ -15,6 +15,7 @@ import {
   PhLinkSimple,
   PhMagnifyingGlass,
   PhShapes,
+  PhSquaresFour,
   PhTable,
   PhTrash,
   PhTree,
@@ -48,7 +49,7 @@ const emit = defineEmits<{
 }>()
 
 const kindCounts = computed(() => {
-  const m: Record<string, number> = { card: 0, action: 0, guard: 0, idea: 0 }
+  const m: Record<string, number> = { card: 0, genre: 0, action: 0, guard: 0, idea: 0 }
   for (const n of props.nodes) m[n.kind] = (m[n.kind] ?? 0) + 1
   return m
 })
@@ -142,6 +143,7 @@ function isNavActive(id: string): boolean {
 
 const KIND_GROUPS: { id: string; label: string; hint?: string }[] = [
   { id: 'card', label: 'Cards', hint: 'Groups' },
+  { id: 'genre', label: 'Genres', hint: 'Categories' },
   { id: 'action', label: 'Actions' },
   { id: 'guard', label: 'Guards' },
   { id: 'idea', label: 'Ideas' },
@@ -160,6 +162,7 @@ const VIEWS: ViewRow[] = [
   { id: 'graph', label: 'Graph View', icon: PhGraph },
   { id: 'table', label: 'Table View', icon: PhTable },
   { id: 'board', label: 'Board View', icon: PhKanban },
+  { id: 'matrix', label: 'Landmark Matrix', icon: PhSquaresFour },
   { id: 'calendar', label: 'Calendar', icon: PhCalendarBlank },
   { id: 'entities', label: 'Entities', icon: PhShapes },
   { id: 'settings', label: 'Settings', icon: PhGearSix, sep: true },
