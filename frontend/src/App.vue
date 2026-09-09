@@ -660,6 +660,15 @@ function onGraphDropReparent(childId: string, parentId: string) {
   mutationError.value = ''
   void runMutation(() => reparentNode(childId, parentId))
 }
+
+/** Double-click navigation (test-feedback A-1 follow-up): focus a node's
+ * local graph from the global/overview canvases. */
+function openLocalGraph(id: string) {
+  select(id)
+  graphScope.value = 'local'
+  navChoice.value = 'graph'
+  page.value = 'workspace'
+}
 const openPath = ref('examples/realm-demo')
 const dialogError = ref('')
 const openBusy = ref(false)
@@ -1244,6 +1253,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
           @clear-filters="clearFilters"
           @focus-search="filtersOpen = true; focusFilters()"
           @reparent="onGraphDropReparent"
+          @open-local="openLocalGraph"
           @create="requestCreate({ parent: $event })"
           @create-any="requestCreate()"
           @delete-node="requestDeleteById"

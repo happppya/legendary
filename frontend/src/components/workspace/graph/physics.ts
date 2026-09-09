@@ -3,12 +3,15 @@
 // graph engine will take, see doc 07). Auto-lays the scene out when playing;
 // pausing freezes it, dragging overrides an item's physics.
 //
+// The world is UNBOUNDED: nodes may settle anywhere on the infinite plane
+// (users pan/zoom the viewport to move around). Only a very soft leash
+// toward the origin keeps the cluster from drifting away over time.
+//
 // O(n²) pair forces are fine for the local scene; the Wasm engine is where
 // this goes Barnes–Hut for whole-realm canvases.
 
 import type { SceneItem } from './scene'
-import { sceneCenter, seedN } from './scene'
-import { SCENE_HEIGHT, SCENE_WIDTH } from '../../../lib/mockRealm'
+import { seedN } from './scene'
 
 // Spring / repulsion tuning for a calm, readable settle.
 export const FORCES = {
@@ -30,7 +33,6 @@ export function applyForces(
   dt: number,
 ): void {
   if (items.length < 2) return
-  const { x: cx, y: cy } = sceneCenter()
 
   // pair forces
   for (let i = 0; i < items.length; i++) {
@@ -66,9 +68,10 @@ export function applyForces(
   for (const n of items) {
     if (n.key === dragKey) continue
 
-    // weak pull toward canvas centre keeps the cluster on-screen
-    n.vx += (cx - n.x) * FORCES.gravity
-    n.vy += (cy - n.y) * FORCES.gravity
+    // very soft pull toward the world origin — a leash, not a wall, so the
+    // layout stays centred-ish without clamping anything to a rectangle
+    n.vx += (0 - n.x) * FORCES.gravity
+    n.vy += (0 - n.y) * FORCES.gravity
 
     const sp = Math.hypot(n.vx, n.vy)
     if (sp > FORCES.maxSpeed) {
@@ -79,23 +82,5 @@ export function applyForces(
     n.vy *= FORCES.damping
     n.x += n.vx * dt * 60
     n.y += n.vy * dt * 60
-
-    // keep the whole shape (plus guard captions) inside the canvas
-    const hw = n.w / 2 + (n.node.kind === 'guard' ? 44 : 14)
-    const hh = n.h / 2 + (n.node.kind === 'guard' ? 22 : 10)
-    if (n.x < hw) {
-      n.x = hw
-      n.vx *= -0.3
-    } else if (n.x > SCENE_WIDTH - hw) {
-      n.x = SCENE_WIDTH - hw
-      n.vx *= -0.3
-    }
-    if (n.y < hh) {
-      n.y = hh
-      n.vy *= -0.3
-    } else if (n.y > SCENE_HEIGHT - hh) {
-      n.y = SCENE_HEIGHT - hh
-      n.vy *= -0.3
-    }
   }
 }

@@ -43,6 +43,8 @@ const emit = defineEmits<{
   'update:overlayMode': [mode: OverlayMode]
   'update:scope': [scope: GraphScope]
   'update:completionLevel': [level: CompletionLevel]
+  /** Double-click a node in global/overview: open its local graph. */
+  openLocal: [id: string]
   /** Create a node (graph toolbar preset: parent id from the selection). */
   create: [parentId: string | null]
   /** Create a node from the table's + (no preset). */
@@ -164,6 +166,7 @@ onBeforeUnmount(() => {
         :completion-level="completionLevel"
         @select="emit('select', $event)"
         @reparent="(childId, parentId) => emit('reparent', childId, parentId)"
+        @open-local="(id) => emit('openLocal', id)"
         @create="(parentId) => emit('create', parentId)"
         @close="emit('update:showGraph', false)"
         @update:overlay-mode="emit('update:overlayMode', $event)"

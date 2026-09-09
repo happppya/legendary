@@ -22,6 +22,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   PhArrowsOut,
   PhArrowClockwise,
+  PhCrosshair,
   PhMinus,
   PhPause,
   PhPlay,
@@ -74,12 +75,20 @@ const emit = defineEmits<{
   create: [parentId: string | null]
   /** Close the graph tab (reopenable from the tab strip / menu). */
   close: []
+  /** Double-click navigation: focus this node's local graph. */
+  openLocal: [id: string]
 }>()
 
 /** Node metadata + live physics state, keyed by scene spot key. */
 const live = ref<SceneItem[]>([])
 
 const { x: cx, y: cy } = sceneCenter()
+void cx
+void cy
+/** ViewBox centre — the fixed pivot of the zoom/pan transform (the SVG's
+ * `0 0 W H` viewBox always maps fully onto the canvas, letterboxed). */
+const VB_CX = SCENE_WIDTH / 2
+const VB_CY = SCENE_HEIGHT / 2
 
 /** Scene signature - re-seed only when the member set really changes (realm
  * open/reload, or the mock/local scene swaps). Dragging and auto-layout do
@@ -154,18 +163,20 @@ const dragOffset = ref({ x: 0, y: 0 })
 const svgRef = ref<SVGSVGElement | null>(null)
 const suppressClick = ref(false)
 
+/** Screen (client) → world coordinates through the full viewport transform:
+ * base fit-scale × zoom around the pan centre. The world is unbounded, so
+ * this is valid for any pan/zoom. */
 function toWorld(clientX: number, clientY: number): { x: number; y: number } {
   const svg = svgRef.value
-  if (!svg) return { x: cx, y: cy }
+  if (!svg) return { x: panX.value, y: panY.value }
   const rect = svg.getBoundingClientRect()
   const s = Math.min(rect.width / SCENE_WIDTH, rect.height / SCENE_HEIGHT)
   const offX = (rect.width - SCENE_WIDTH * s) / 2
   const offY = (rect.height - SCENE_HEIGHT * s) / 2
   const u0 = (clientX - rect.left - offX) / s
   const v0 = (clientY - rect.top - offY) / s
-  // invert the zoom group transform around the canvas centre
   const k = scale.value
-  return { x: cx + (u0 - cx) / k, y: cy + (v0 - cy) / k }
+  return { x: panX.value + (u0 - VB_CX) / k, y: panY.value + (v0 - VB_CY) / k }
 }
 
 function onPointerDown(e: PointerEvent, item: SceneItem) {
@@ -221,8 +232,9 @@ function onPointerMove(e: PointerEvent) {
   if (!item) return
   suppressClick.value = true
   const p = toWorld(e.clientX, e.clientY)
-  item.x = Math.min(SCENE_WIDTH - 60, Math.max(60, p.x - dragOffset.value.x))
-  item.y = Math.min(SCENE_HEIGHT - 60, Math.max(60, p.y - dragOffset.value.y))
+  // unbounded plane: dragged nodes go wherever the user drops them
+  item.x = p.x - dragOffset.value.x
+  item.y = p.y - dragOffset.value.y
   item.vx = 0
   item.vy = 0
   // live drop-target detection while dragging
@@ -254,19 +266,113 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointerup', onPointerUp)
 })
 
-/* ---- zoom ----------------------------------------------------------------- */
+/* ---- viewport: pan + zoom over the unbounded world (doc 05 §5.5) ---------- */
 
+/** Zoom scale, 10% → 400%. */
 const scale = ref(1)
+/** World point displayed at the viewport centre (the pan offset). */
+const panX = ref(0)
+const panY = ref(0)
+
 const viewTransform = computed(
-  () => `translate(${cx} ${cy}) scale(${scale.value}) translate(${-cx} ${-cy})`,
+  () => `translate(${VB_CX} ${VB_CY}) scale(${scale.value}) translate(${-panX.value} ${-panY.value})`,
 )
 
+/** Zoom by `f`, keeping the world point under `clientX/Y` (or the viewport
+ * centre when omitted) fixed on screen. */
+function zoomAt(f: number, clientX?: number, clientY?: number) {
+  const svg = svgRef.value
+  const next = Math.min(4, Math.max(0.1, scale.value * f))
+  if (next === scale.value) return
+  if (svg && clientX !== undefined && clientY !== undefined) {
+    const before = toWorld(clientX, clientY)
+    scale.value = next
+    const after = toWorld(clientX, clientY)
+    panX.value += before.x - after.x
+    panY.value += before.y - after.y
+  } else {
+    scale.value = next
+  }
+}
+
 function zoomBy(f: number) {
-  scale.value = Math.min(1.8, Math.max(0.5, scale.value * f))
+  zoomAt(f)
 }
 
 function resetZoom() {
   scale.value = 1
+  panX.value = 0
+  panY.value = 0
+}
+
+/** Fit the viewport to the bounding box of all scene items (with padding). */
+function fitToNodes() {
+  if (!live.value.length) {
+    resetZoom()
+    return
+  }
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const it of live.value) {
+    minX = Math.min(minX, it.x - it.w / 2)
+    minY = Math.min(minY, it.y - it.h / 2)
+    maxX = Math.max(maxX, it.x + it.w / 2)
+    maxY = Math.max(maxY, it.y + it.h / 2)
+  }
+  const pad = 80
+  const w = Math.max(1, maxX - minX + pad * 2)
+  const h = Math.max(1, maxY - minY + pad * 2)
+  // The whole viewBox (0..W, 0..H) is always visible, and the transform
+  // maps the pan target onto the viewBox centre — so the bbox half-width
+  // at scale k must fit within W/2 and H/2.
+  scale.value = Math.min(4, Math.max(0.1, Math.min(SCENE_WIDTH / w, SCENE_HEIGHT / h)))
+  panX.value = (minX + maxX) / 2
+  panY.value = (minY + maxY) / 2
+}
+
+/* ---- canvas panning (drag empty space) ------------------------------------- */
+
+const panning = ref(false)
+let panStart = { x: 0, y: 0, px: 0, py: 0 }
+
+function onCanvasPointerDown(e: PointerEvent) {
+  if (e.button !== 0) return
+  panning.value = true
+  panStart = { x: e.clientX, y: e.clientY, px: panX.value, py: panY.value }
+  window.addEventListener('pointermove', onCanvasPointerMove)
+  window.addEventListener('pointerup', onCanvasPointerUp)
+}
+
+function onCanvasPointerMove(e: PointerEvent) {
+  if (!panning.value) return
+  const svg = svgRef.value
+  if (!svg) return
+  const rect = svg.getBoundingClientRect()
+  const s = Math.min(rect.width / SCENE_WIDTH, rect.height / SCENE_HEIGHT)
+  panX.value = panStart.px - (e.clientX - panStart.x) / (s * scale.value)
+  panY.value = panStart.py - (e.clientY - panStart.y) / (s * scale.value)
+}
+
+function onCanvasPointerUp() {
+  panning.value = false
+  window.removeEventListener('pointermove', onCanvasPointerMove)
+  window.removeEventListener('pointerup', onCanvasPointerUp)
+}
+
+/** Wheel zooms toward the cursor; ctrl+wheel (pinch) also lands here. */
+function onWheel(e: WheelEvent) {
+  e.preventDefault()
+  const f = e.deltaY < 0 ? 1.12 : 1 / 1.12
+  zoomAt(f, e.clientX, e.clientY)
+}
+
+/* ---- double-click navigation (global / overview → local) ------------------- */
+
+function onDblClickItem(item: SceneItem) {
+  if (isOrigin(item)) return
+  emit('openLocal', item.node.id)
 }
 
 /* ---- edges ------------------------------------------------------------------- */
@@ -444,8 +550,8 @@ const originItem = computed<SceneItem | null>(() => {
       validationError: null,
       body: '',
     } as NodeView,
-    x: cx,
-    y: 64,
+    x: 0,
+    y: -260,
     w: 150,
     h: 40,
     vx: 0,
@@ -589,8 +695,11 @@ function isOrigin(item: SceneItem): boolean {
         <button type="button" class="tool-btn" aria-label="Zoom in" title="Zoom in" @click="zoomBy(1.25)">
           <PhPlus :size="12" aria-hidden="true" />
         </button>
-        <button type="button" class="tool-btn" aria-label="Fit to screen" title="Fit to screen" @click="resetZoom">
+        <button type="button" class="tool-btn" aria-label="Zoom to fit" title="Zoom to fit (shows every node)" @click="fitToNodes">
           <PhArrowsOut :size="12" aria-hidden="true" />
+        </button>
+        <button type="button" class="tool-btn" aria-label="Reset view" title="Reset view (recentre on world origin, 100%)" @click="resetZoom">
+          <PhCrosshair :size="12" aria-hidden="true" />
         </button>
         <span class="tool-divider" aria-hidden="true"></span>
         <select
@@ -616,9 +725,7 @@ function isOrigin(item: SceneItem): boolean {
           </select>
         </template>
       </div>
-    </div>
-
-    <div class="graph-canvas">
+    </div>      <div class="graph-canvas">
       <div v-if="sceneItems.length" class="scene-wrap">
         <svg
           ref="svgRef"
@@ -626,8 +733,10 @@ function isOrigin(item: SceneItem): boolean {
           :viewBox="`0 0 ${SCENE_WIDTH} ${SCENE_HEIGHT}`"
           preserveAspectRatio="xMidYMid meet"
           role="img"
-          aria-label="Local dependency graph"
-          :class="{ dragging: draggingKey }"
+          aria-label="Dependency graph canvas — drag empty space to pan, scroll to zoom, double-click a node to open its local graph"
+          :class="{ dragging: draggingKey, panning }"
+          @pointerdown.self.prevent="onCanvasPointerDown"
+          @wheel="onWheel"
         >
           <defs>
             <marker id="arrow-dep" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -670,6 +779,7 @@ function isOrigin(item: SceneItem): boolean {
               :style="isOrigin(item) ? undefined : { transformOrigin: `${item.x}px ${item.y}px`, transformBox: 'fill-box' }"
               @pointerdown="onPointerDown($event, item)"
               @click="onClickItem(item)"
+              @dblclick.stop="onDblClickItem(item)"
             >
               <title>{{ KIND_LABEL[item.node.kind] }} — {{ item.node.title }} ({{ item.node.effectiveStatus }})</title>
 
@@ -999,6 +1109,14 @@ function isOrigin(item: SceneItem): boolean {
 
 .scene.dragging {
   cursor: grabbing;
+}
+
+.scene.panning {
+  cursor: grabbing;
+}
+
+.scene {
+  cursor: grab;
 }
 
 .gnode {

@@ -14,6 +14,20 @@
 import type { NodeView } from '../../../types'
 import { MOCK_BY_KEY, SCENE_HEIGHT, SCENE_SPOTS, SCENE_WIDTH } from '../../../lib/mockRealm'
 
+/**
+ * The scene world is UNBOUNDED: items live on an infinite plane centred on
+ * the origin (0, 0) and the viewport pans/zooms freely. `SCENE_WIDTH` /
+ * `SCENE_HEIGHT` remain only as the *starting viewport* size for the demo's
+ * curated spot coordinates.
+ */
+export const WORLD_ORIGIN = { x: 0, y: 0 }
+
+/** Ring radius for the initial scatter, scaled to the member count so big
+ * realms start spread out instead of overlapping. */
+export function worldRadiusFor(n: number): number {
+  return 300 + Math.sqrt(Math.max(1, n)) * 90
+}
+
 /** Sizes per kind (centred at x,y). */
 export const KIND_SIZE: Record<string, { w: number; h: number }> = {
   card: { w: 190, h: 56 },
@@ -42,8 +56,9 @@ export interface SceneItem {
   vy: number
 }
 
+/** World origin — the gravity leash target and zoom/pan pivot default. */
 export function sceneCenter(): { x: number; y: number } {
-  return { x: SCENE_WIDTH / 2, y: SCENE_HEIGHT / 2 }
+  return WORLD_ORIGIN
 }
 
 /** Cheap deterministic pseudo-random for stable-but-varied starts. */
@@ -56,15 +71,14 @@ export function seedN(s: string): number {
   return ((h >>> 0) % 1000) / 1000
 }
 
-/** Deterministic scatter for realm-wide scenes (ring around the centre). */
+/** Deterministic scatter for realm-wide scenes (ring around the origin). */
 function scatterPosition(key: string, index: number, total: number) {
-  const { x: cx, y: cy } = sceneCenter()
-  const base = Math.min(SCENE_WIDTH, SCENE_HEIGHT) * 0.42
+  const base = worldRadiusFor(total)
   const ang = (index / total) * Math.PI * 2 + seedN(key) * 1.4
   const rad = base * (0.5 + 0.9 * seedN(key + 'r'))
   return {
-    x: cx + Math.cos(ang) * rad,
-    y: cy + Math.sin(ang) * rad,
+    x: Math.cos(ang) * rad,
+    y: Math.sin(ang) * rad,
     vx: (seedN(key + 'vx') - 0.5) * 2.4,
     vy: (seedN(key + 'vy') - 0.5) * 2.4,
   }
@@ -139,13 +153,14 @@ export function buildSceneItems(src: SceneSource): SceneItem[] {
     const spotKey = spotById.get(node.id)
     const spot = spotKey ? SCENE_SPOTS.find((s) => s.key === spotKey) : undefined
     const p = scatterPosition(node.id, i, size)
-    // deterministic tiny jitter so the first auto-layout visibly settles
+    // deterministic tiny jitter so the first auto-layout visibly settles;
+    // curated demo spots are re-centred from viewport coords to world coords
     const jitter = (seedN(spotKey ?? node.id) - 0.5) * 14
     out.push({
       key: node.id,
       node,
-      x: spot ? spot.x : p.x,
-      y: spot ? spot.y + jitter : p.y,
+      x: spot ? spot.x - SCENE_WorldOffset.x : p.x,
+      y: spot ? spot.y + jitter - SCENE_WorldOffset.y : p.y,
       w: dim.w,
       h: dim.h,
       vx: p.vx,
@@ -155,6 +170,11 @@ export function buildSceneItems(src: SceneSource): SceneItem[] {
   }
   return out
 }
+
+/** Demo spot coordinates were authored against the old viewport (top-left
+ * 0,0); subtract the old centre so the curated layout is centred on the
+ * world origin like every other scope. */
+const SCENE_WorldOffset = { x: SCENE_WIDTH / 2, y: SCENE_HEIGHT / 2 }
 
 /** Scene signature — re-seed only when the member set really changes (realm
  * open/reload, scope swap, or a local-scope selection change that reshapes
@@ -169,16 +189,15 @@ export function sceneSignature(src: SceneSource): string {
   return `${src.scope[0]}|${focus}|${ids.join('|')}`
 }
 
-/** Scatter every item onto a ring and re-kick its velocity; the simulator
- * then re-settles the cluster. Mutates the passed items in place. */
+/** Scatter every item onto a ring around the origin and re-kick its
+ * velocity; the simulator then re-settles the cluster. Mutates in place. */
 export function scatterAll(items: SceneItem[], velocity = 3): void {
-  const { x: cx, y: cy } = sceneCenter()
-  const base = Math.min(SCENE_WIDTH, SCENE_HEIGHT) * 0.42
+  const base = worldRadiusFor(items.length)
   for (let i = 0; i < items.length; i++) {
     const ang = (i / items.length) * Math.PI * 2 + 0.6
     const rad = base * (0.55 + 0.9 * seedN(items[i]!.key + 'r'))
-    items[i]!.x = cx + Math.cos(ang) * rad
-    items[i]!.y = cy + Math.sin(ang) * rad
+    items[i]!.x = Math.cos(ang) * rad
+    items[i]!.y = Math.sin(ang) * rad
     items[i]!.vx = (seedN(items[i]!.key + 'vx') - 0.5) * velocity
     items[i]!.vy = (seedN(items[i]!.key + 'vy') - 0.5) * velocity
   }
