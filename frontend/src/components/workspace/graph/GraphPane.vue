@@ -26,6 +26,7 @@ import {
   PhPause,
   PhPlay,
   PhPlus,
+  PhX,
 } from '@phosphor-icons/vue'
 import { OVERLAY_LABEL, OVERLAY_MODES } from '../../../lib/overlay'
 import type { NodeView } from '../../../types'
@@ -69,6 +70,10 @@ const emit = defineEmits<{
   'update:overlayMode': [mode: OverlayMode]
   'update:scope': [scope: GraphScope]
   'update:completionLevel': [level: CompletionLevel]
+  /** Open the shared New Node dialog with the selection as parent preset. */
+  create: [parentId: string | null]
+  /** Close the graph tab (reopenable from the tab strip / menu). */
+  close: []
 }>()
 
 /** Node metadata + live physics state, keyed by scene spot key. */
@@ -505,6 +510,17 @@ function isOrigin(item: SceneItem): boolean {
 <template>
   <section class="graph-pane" aria-label="Graph view">
     <div class="graph-head">
+      <span class="pane-tab" title="Graph view">
+        Graph View
+        <button
+          type="button"
+          class="tab-close"
+          aria-label="Close graph view"
+          @click="emit('close')"
+        >
+          <PhX :size="10" aria-hidden="true" />
+        </button>
+      </span>
       <nav class="crumbs" aria-label="Breadcrumb">
         <template v-for="(c, i) in crumbs" :key="i">
           <span v-if="i > 0" class="crumb-sep" aria-hidden="true">›</span>
@@ -533,6 +549,17 @@ function isOrigin(item: SceneItem): boolean {
           <option value="overview">Genre overview</option>
         </select>
         <span class="tool-divider" aria-hidden="true"></span>
+        <button
+          v-if="!isMockScene"
+          type="button"
+          class="tool-btn"
+          :title="selectedId ? `New node under ${selectedId}` : 'New node (no parent)'"
+          aria-label="New node"
+          @click="emit('create', selectedId)"
+        >
+          <PhPlus :size="12" aria-hidden="true" />
+        </button>
+        <span v-if="!isMockScene" class="tool-divider" aria-hidden="true"></span>
         <button
           type="button"
           class="tool-btn"
@@ -838,11 +865,43 @@ function isOrigin(item: SceneItem): boolean {
 .graph-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   padding: 5px 10px;
   border-bottom: 1px solid var(--line-1);
   min-height: 30px;
+}
+
+/* ---- pane tab (matches the Table pane's tab strip) ---------------------- */
+
+.pane-tab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 8px;
+  border-radius: var(--r-m) 0 0 var(--r-m);
+  border: 1px solid var(--line-2);
+  border-right: 0;
+  background: var(--bg-2);
+  color: var(--text-1);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-s);
+  color: var(--text-3);
+}
+
+.tab-close:hover {
+  color: var(--text-1);
+  background: var(--bg-3);
 }
 
 .crumbs {

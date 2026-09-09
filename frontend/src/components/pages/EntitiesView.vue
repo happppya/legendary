@@ -4,12 +4,22 @@
 // kind filter applied.
 
 import { computed } from 'vue'
+import { PhPlus } from '@phosphor-icons/vue'
 import type { NodeView } from '../../types'
 import { KIND_ICON, KIND_LABEL, KINDS, isContainerKind } from '../../lib/kind'
 import type { CheckRow } from '../../lib/filters'
 
-const props = defineProps<{ nodes: NodeView[]; kindCounts: CheckRow[] }>()
-const emit = defineEmits<{ browse: [kind: string] }>()
+const props = defineProps<{
+  nodes: NodeView[]
+  kindCounts: CheckRow[]
+  /** Mutations are desktop-only; the browser fixture preview hides them. */
+  canMutate: boolean
+}>()
+const emit = defineEmits<{
+  browse: [kind: string]
+  /** Open the shared New Node dialog with this kind preset. */
+  create: [kind: string]
+}>()
 
 const DESCRIPTIONS: Record<string, string> = {
   card: 'Container / group nodes. Hold documentation, system context and child nodes.',
@@ -41,6 +51,16 @@ const groups = computed(() =>
           </span>
           <h2 class="ent-title">{{ g.label }}s</h2>
           <span class="ent-count mono">{{ g.count }}</span>
+          <button
+            v-if="canMutate"
+            type="button"
+            class="ent-add"
+            :title="`New ${g.label.toLowerCase()}`"
+            :aria-label="`New ${g.label.toLowerCase()}`"
+            @click="emit('create', g.kind)"
+          >
+            <PhPlus :size="11" aria-hidden="true" />
+          </button>
         </header>
         <p class="ent-desc">{{ g.desc }}</p>
         <ul class="ent-list">
@@ -135,6 +155,22 @@ const groups = computed(() =>
   margin-left: auto;
   font-size: 11px;
   color: var(--faint);
+}
+
+.ent-add {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-s);
+  color: var(--text-3);
+}
+
+.ent-add:hover {
+  background: var(--bg-2);
+  color: var(--gold);
 }
 
 .ent-desc {

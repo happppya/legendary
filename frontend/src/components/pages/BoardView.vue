@@ -4,14 +4,27 @@
 // follows shared selection in the workspace page).
 
 import { computed } from 'vue'
-import { PhPlus } from '@phosphor-icons/vue'
+import { PhPencilSimple, PhPlus, PhTrash } from '@phosphor-icons/vue'
 import type { NodeView } from '../../types'
 import { KIND_ICON, KIND_LABEL, isContainerKind } from '../../lib/kind'
 import { STATUSES } from '../../lib/status'
 import { qpOf } from '../../lib/node'
 
-const props = defineProps<{ nodes: NodeView[]; selectedId: string | null }>()
-const emit = defineEmits<{ select: [id: string] }>()
+const props = defineProps<{
+  nodes: NodeView[]
+  selectedId: string | null
+  /** Mutations are desktop-only; the browser fixture preview hides them. */
+  canMutate: boolean
+}>()
+const emit = defineEmits<{
+  select: [id: string]
+  /** Create a node seeded with the column's status as its initial one. */
+  create: [status: string]
+  /** Edit (rename / notes) the node — opens the shared edit flow. */
+  edit: [id: string]
+  /** Delete the node (App routes through the confirmation modal). */
+  'delete-node': [id: string]
+}>()
 
 const columns = computed(() =>
   STATUSES.map((s) => ({
@@ -35,25 +48,54 @@ function cardTitle(n: NodeView): string {
             {{ col.label }}
           </span>
           <span class="bcol-count mono">{{ col.cards.length }}</span>
-          <button type="button" class="bcol-add" title="New node (editor milestone)" aria-label="Add node">
+          <button
+            v-if="canMutate"
+            type="button"
+            class="bcol-add"
+            title="New node in this column"
+            aria-label="Add node"
+            @click="emit('create', col.key)"
+          >
             <PhPlus :size="12" aria-hidden="true" />
           </button>
         </header>
         <div class="bcol-body">
-          <button
+          <div
             v-for="n in col.cards"
             :key="n.id"
-            type="button"
             class="card"
             :class="[n.kind, { sel: n.id === selectedId, done: n.effectiveStatus === 'vanquished' }]"
             :title="`${KIND_LABEL[n.kind]} — ${n.id}`"
+            role="button"
+            tabindex="0"
             @click="emit('select', n.id)"
+            @keydown.enter.prevent="emit('select', n.id)"
           >
             <span class="card-top">
               <span class="kind-tile" :class="n.kind">
                 <component :is="KIND_ICON[n.kind]" :size="10" aria-hidden="true" />
               </span>
               <span class="card-id mono">{{ n.id }}</span>
+              <span v-if="canMutate" class="card-acts">
+                <button
+                  type="button"
+                  class="card-act"
+                  title="Edit title & notes"
+                  aria-label="Edit node"
+                  @click.stop="emit('edit', n.id)"
+                >
+                  <PhPencilSimple :size="10" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  class="card-act danger"
+                  title="Delete node"
+                  aria-label="Delete node"
+                  @click.stop="emit('delete-node', n.id)"
+                >
+                  <PhTrash :size="10" aria-hidden="true" />
+                </button>
+              </span>
             </span>
             <span class="card-title">{{ cardTitle(n) }}</span>
             <span v-if="n.epics.length" class="card-epics">
@@ -67,7 +109,7 @@ function cardTitle(n: NodeView): string {
               </span>
               <span v-if="n.blocked" class="bmark" title="Blocked by an unfinished prerequisite">blocked</span>
             </span>
-          </button>
+          </div>
           <p v-if="!col.cards.length" class="bcol-empty">No cards</p>
         </div>
       </div>
@@ -185,7 +227,40 @@ function cardTitle(n: NodeView): string {
   background: var(--bg-2);
   text-align: left;
   color: var(--text-1);
+  cursor: pointer;
   transition: border-color 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.card-acts {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.card:hover .card-acts,
+.card:focus-within .card-acts {
+  display: inline-flex;
+}
+
+.card-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-s);
+  color: var(--text-3);
+}
+
+.card-act:hover {
+  background: var(--bg-3);
+  color: var(--text-1);
+}
+
+.card-act.danger:hover {
+  background: var(--err-bg);
+  color: var(--err-fg);
 }
 
 .card:hover {

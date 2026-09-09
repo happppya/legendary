@@ -34,7 +34,9 @@ import OpenRealmDialog from './components/overlays/OpenRealmDialog.vue'
 import NewRealmDialog from './components/overlays/NewRealmDialog.vue'
 import MutationDialog, { type MutationRequest } from './components/overlays/MutationDialog.vue'
 import MoveToDialog from './components/overlays/MoveToDialog.vue'
+import NodeCreateDialog from './components/overlays/NodeCreateDialog.vue'
 import {
+  createNode,
   deleteNode,
   inDesktop,
   onRealmChanged,
@@ -199,6 +201,9 @@ const disciplineTreeC = computed<TaxRow[] | null>(() =>
 /* ---- pages -------------------------------------------------------------- */
 
 const page = ref<Page>('workspace')
+/** Workspace split state (test-feedback A-4): which panes are open is
+ * remembered across page switches, so leaving to Board and coming back
+ * restores exactly what the user had open. */
 const showGraph = ref(true)
 const showTable = ref(true)
 
@@ -217,24 +222,24 @@ const explorerActive = computed(() =>
 
 function openView(id: string) {
   switch (id) {
+    // graph/table are tab-level views over the same workspace page: open
+    // the missing pane but never close its sibling (A-4 — closing is only
+    // ever explicit via a tab's ×), then stay on the workspace page.
     case 'workspace':
-      page.value = 'workspace'
-      showGraph.value = true
-      showTable.value = true
-      navChoice.value = 'workspace'
-      break
     case 'graph':
+    case 'table': {
+      if (id === 'workspace') {
+        showGraph.value = true
+        showTable.value = true
+      } else if (id === 'graph' && !showGraph.value) {
+        showGraph.value = true
+      } else if (id === 'table' && !showTable.value) {
+        showTable.value = true
+      }
+      navChoice.value = id as 'workspace' | 'graph' | 'table'
       page.value = 'workspace'
-      showGraph.value = true
-      showTable.value = false
-      navChoice.value = 'graph'
       break
-    case 'table':
-      page.value = 'workspace'
-      showGraph.value = false
-      showTable.value = true
-      navChoice.value = 'table'
-      break
+    }
     case 'board':
       page.value = 'board'
       break
@@ -256,8 +261,10 @@ function openView(id: string) {
 /** Kind / taxonomy / tag filters should always land somewhere visible. */
 function toWorkspace() {
   page.value = 'workspace'
-  showGraph.value = true
-  showTable.value = true
+  if (!showGraph.value && !showTable.value) {
+    showGraph.value = true
+    showTable.value = true
+  }
 }
 
 function onToggleKind(kind: string) {
@@ -494,6 +501,78 @@ function onReparentRoot() {
   if (n) void runMutation(() => reparentNode(n.id, null))
 }
 
+/* ---- create node (test-feedback A-2) ------------------------------------- */
+
+/** Open when non-null; presets flow in from whichever view raised the +. */
+const createRequest = ref<{ kind: string | null; parent: string | null; status: string | null } | null>(null)
+
+function requestCreate(preset: { kind?: string | null; parent?: string | null; status?: string | null } = {}) {
+  mutationError.value = ''
+  createRequest.value = {
+    kind: preset.kind ?? null,
+    parent: preset.parent ?? null,
+    status: preset.status ?? null,
+  }
+}
+
+async function confirmCreate(args: {
+  kind: string
+  title: string
+  parent: string | null
+  priority: string
+  questPoints: number | null
+}) {
+  const status = createRequest.value?.status
+  createRequest.value = null
+  const out = await runMutationReturning(() =>
+    createNode({
+      kind: args.kind,
+      title: args.title,
+      parent: args.parent,
+      priority: args.priority,
+      questPoints: args.questPoints,
+    }),
+  )
+  // Board columns create into a status: move the fresh node there when the
+  // engine default (unstarted) differs.
+  if (out && status && status !== 'unstarted' && status !== 'blocked') {
+    const newId = newestCreatedId(out)
+    if (newId) {
+      await runMutation(() => updateNodeStatus(newId, status as 'unstarted' | 'active' | 'vanquished'))
+    }
+  }
+}
+
+/** Best-effort: pick the node id most recently created by the last op. */
+function newestCreatedId(out: MutationPayloadLike): string | null {
+  const known = new Set(nodesBeforeLastMutation.value)
+  const fresh = out.realm.nodes.filter((n) => !known.has(n.id))
+  if (fresh.length === 1) return fresh[0]!.id
+  if (fresh.length > 1) {
+    return fresh.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))[0]!.id
+  }
+  return null
+}
+
+const nodesBeforeLastMutation = ref<string[]>([])
+
+/** runMutation that also returns the payload (null on failure). */
+async function runMutationReturning(fn: () => Promise<MutationPayloadLike>): Promise<MutationPayloadLike | null> {
+  mutationBusy.value = true
+  nodesBeforeLastMutation.value = nodes.value.map((n) => n.id)
+  try {
+    const out = await fn()
+    applySnapshot(out.realm)
+    mutationError.value = ''
+    return out
+  } catch (err) {
+    mutationError.value = String(err)
+    return null
+  } finally {
+    mutationBusy.value = false
+  }
+}
+
 /* ---- focused-node workspace editors (doc 05 §5.1) ----------------------- */
 
 /** Status set from the editor segment. A Card → vanquished with unvanquished
@@ -557,6 +636,22 @@ function confirmMoveTo(parent: string | null) {
   void runMutation(() => reparentNode(req.node.id, parent))
 }
 
+/** Delete from any view (board/table/matrix hover trash). Routes through
+ * the doc 04 §4.5 confirmation modal when the node has descendants. */
+function requestDeleteById(id: string) {
+  const n = nodesById.value.get(id)
+  if (n) requestDelete(n)
+}
+
+/** Edit entry point from card-hover affordances: select the node and open
+ * the focused-node workspace, where the title/body editors live. */
+function requestEditById(id: string) {
+  select(id)
+  page.value = 'workspace'
+  showGraph.value = true
+  showTable.value = true
+}
+
 /** Drop a dragged graph node onto another node: reparent through the same
  * dialog-free path (the engine still cycle-checks). */
 function onGraphDropReparent(childId: string, parentId: string) {
@@ -604,6 +699,7 @@ const paletteCommands = computed<PaletteCommand[]>(() => {
       title: 'Move Subgraph To…',
       hint: selected.value ? `move ${selected.value.id} under another Card` : undefined,
     })
+    out.push({ id: 'node.create', title: 'New Node…', hint: 'create from any view' })
   }
   out.push({ id: 'graph.overlay.none', title: 'Overlay: Color by Kind' })
   out.push({ id: 'graph.overlay.epic', title: 'Overlay: Color by Epic', hint: 'C E' })
@@ -619,12 +715,14 @@ const paletteCommands = computed<PaletteCommand[]>(() => {
     out.push({ id: 'node.wrapshortcut', title: 'Wrap in Card Group', hint: 'Ctrl+Shift+W' })
   }
   out.push({ id: 'view.workspace', title: 'Open Explorer workspace' })
-  out.push({ id: 'view.table', title: 'Switch to Table View' })
+  out.push({ id: 'view.graph', title: 'Open Graph View', hint: showGraph.value ? undefined : 'reopen tab' })
+  out.push({ id: 'view.table', title: 'Switch to Table View', hint: showTable.value ? undefined : 'reopen tab' })
   out.push({ id: 'view.board', title: 'Switch to Board View' })
   out.push({ id: 'view.matrix', title: 'Open Landmark Matrix' })
   out.push({ id: 'view.calendar', title: 'Open Calendar' })
   out.push({ id: 'view.settings', title: 'Open Settings' })
   out.push({ id: 'tools.clearfilters', title: 'Clear filters' })
+  out.push({ id: 'tools.search', title: 'Show filters & search', hint: '/' })
   out.push({ id: 'help.about', title: 'About Legendary' })
   return out
 })
@@ -704,6 +802,8 @@ const menus = computed<MenuSpec[]>(() => {
 
   const activeView: 'workspace' | 'graph' | 'table' | Page = (() => {
     if (page.value === 'workspace') {
+      // Both tabs open → highlight the Explorer row; a single tab keeps its
+      // own view row highlighted (menu checks mirror the explorer list).
       if (showGraph.value && showTable.value) return 'workspace'
       return showGraph.value ? 'graph' : 'table'
     }
@@ -854,6 +954,9 @@ async function runMenu(id: string) {
       if (n) requestMoveSubgraph(n)
       break
     }
+    case 'node.create':
+      requestCreate({ parent: selected.value?.id ?? null })
+      break
     case 'edit.copyid': {
       const n = selected.value
       if (n) {
@@ -1103,15 +1206,20 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
           @close="filtersOpen = false"
           @update:search="filters.search = $event"
         />
+        <!-- A-3: the reopen affordance is always present while filters are
+             hidden — a wide, labelled rail button (works by click AND by
+             the ⌘/ keyboard shortcut, Tools → Search Filters, or the
+             Command Palette "Search Filters" entry). -->
         <button
           v-else
           type="button"
           class="filters-reopen"
-          title="Show filters"
+          title="Show filters (and focus search)"
           aria-label="Show filters"
-          @click="filtersOpen = true"
+          @click="filtersOpen = true; focusFilters()"
         >
           <PhFunnel :size="13" aria-hidden="true" />
+          <span class="filters-reopen-label">Filters</span>
         </button>
 
         <WorkspaceCenter
@@ -1127,6 +1235,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
           :overlay-mode="overlayMode"
           :scope="graphScope"
           :completion-level="completionLevel"
+          :can-mutate="canMutateAny"
           @select="select"
           @update:show-graph="showGraph = $event"
           @update:show-table="showTable = $event"
@@ -1135,6 +1244,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
           @clear-filters="clearFilters"
           @focus-search="filtersOpen = true; focusFilters()"
           @reparent="onGraphDropReparent"
+          @create="requestCreate({ parent: $event })"
+          @create-any="requestCreate()"
+          @delete-node="requestDeleteById"
           @update:overlay-mode="overlayMode = $event"
           @update:scope="graphScope = $event"
           @update:completion-level="completionLevel = $event"
@@ -1187,13 +1299,33 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
 
         <main class="page-main">
           <template v-if="page === 'board'">
-            <BoardView :nodes="filteredNodes" :selected-id="selectedId" @select="select" />
+            <BoardView
+              :nodes="filteredNodes"
+              :selected-id="selectedId"
+              :can-mutate="canMutateAny"
+              @select="select"
+              @create="requestCreate({ status: $event })"
+              @edit="requestEditById"
+              @delete-node="requestDeleteById"
+            />
           </template>
           <template v-else-if="page === 'matrix'">
-            <LandmarkMatrix :nodes="filteredNodes" :selected-id="selectedId" @select="select" />
+            <LandmarkMatrix
+              :nodes="filteredNodes"
+              :selected-id="selectedId"
+              :can-mutate="canMutateAny"
+              @select="select"
+              @delete-node="requestDeleteById"
+            />
           </template>
           <template v-else-if="page === 'entities'">
-            <EntitiesView :nodes="nodes" :kind-counts="kindRowsC" @browse="browseKind" />
+            <EntitiesView
+              :nodes="nodes"
+              :kind-counts="kindRowsC"
+              :can-mutate="canMutateAny"
+              @browse="browseKind"
+              @create="requestCreate({ kind: $event })"
+            />
           </template>
           <template v-else-if="page === 'calendar'">
             <CalendarView />
@@ -1269,6 +1401,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
       @close="moveToRequest = null"
       @move="confirmMoveTo"
     />
+    <NodeCreateDialog
+      v-if="createRequest"
+      :nodes="nodes"
+      :initial-kind="createRequest.kind"
+      :initial-parent="createRequest.parent"
+      :busy="mutationBusy"
+      :error="mutationError"
+      @close="createRequest = null"
+      @create="confirmCreate"
+    />
     <AboutDialog v-if="dialog === 'about'" :is-desktop="isDesktop" @close="dialog = null" />
     <OpenRealmDialog
       v-if="dialog === 'open'"
@@ -1308,10 +1450,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
 
 .filters-reopen {
   flex: none;
-  width: 26px;
+  width: 30px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding-top: 10px;
   background: var(--bg-1);
   border-right: 1px solid var(--line-1);
   color: var(--text-3);
@@ -1319,6 +1464,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
 
 .filters-reopen:hover {
   color: var(--gold);
+  background: var(--bg-2);
+}
+
+.filters-reopen-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+  user-select: none;
 }
 
 .page-main {

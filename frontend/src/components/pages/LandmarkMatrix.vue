@@ -9,7 +9,7 @@
 // Clicking a card inspects it via the shared selection.
 
 import { computed, ref } from 'vue'
-import { PhCaretDown, PhCaretRight } from '@phosphor-icons/vue'
+import { PhCaretDown, PhCaretRight, PhTrash } from '@phosphor-icons/vue'
 import type { NodeView } from '../../types'
 import { KIND_ICON, KIND_LABEL, isContainerKind } from '../../lib/kind'
 import { STATUSES } from '../../lib/status'
@@ -17,8 +17,17 @@ import { qpOf } from '../../lib/node'
 
 type MatrixMode = 'landmarks' | 'disciplines' | 'epics'
 
-const props = defineProps<{ nodes: NodeView[]; selectedId: string | null }>()
-const emit = defineEmits<{ select: [id: string] }>()
+const props = defineProps<{
+  nodes: NodeView[]
+  selectedId: string | null
+  /** Mutations are desktop-only; the browser fixture preview hides them. */
+  canMutate: boolean
+}>()
+const emit = defineEmits<{
+  select: [id: string]
+  /** Delete a node (App routes through the confirmation modal). */
+  'delete-node': [id: string]
+}>()
 
 const mode = ref<MatrixMode>('landmarks')
 
@@ -147,24 +156,37 @@ function shortBranch(p: string): string {
               <span class="badge mono">{{ col.cards.length }}</span>
             </header>
             <div class="mx-col-body">
-              <button
+              <div
                 v-for="n in col.cards"
                 :key="n.id"
-                type="button"
                 class="card"
                 :class="[n.kind, { sel: n.id === selectedId, done: n.effectiveStatus === 'vanquished' }]"
                 :title="`${KIND_LABEL[n.kind]} — ${n.id}`"
+                role="button"
+                tabindex="0"
                 @click="emit('select', n.id)"
+                @keydown.enter.prevent="emit('select', n.id)"
               >
                 <span class="card-top">
                   <span class="kind-tile" :class="n.kind">
                     <component :is="KIND_ICON[n.kind]" :size="10" aria-hidden="true" />
                   </span>
                   <span class="card-id mono">{{ n.id }}</span>
+                  <span v-if="canMutate" class="card-acts">
+                    <button
+                      type="button"
+                      class="card-act danger"
+                      title="Delete node"
+                      aria-label="Delete node"
+                      @click.stop="emit('delete-node', n.id)"
+                    >
+                      <PhTrash :size="10" aria-hidden="true" />
+                    </button>
+                  </span>
                   <span v-if="qpOf(n) !== null" class="qp mono">{{ qpOf(n) }}</span>
                 </span>
                 <span class="card-title">{{ n.title }}</span>
-              </button>
+              </div>
               <p v-if="!col.cards.length" class="col-empty">—</p>
             </div>
           </div>
@@ -394,6 +416,32 @@ function shortBranch(p: string): string {
 .card.sel {
   border-color: var(--gold);
   box-shadow: 0 0 0 1px var(--gold);
+}
+
+.card-acts {
+  display: none;
+  align-items: center;
+  margin-left: auto;
+}
+
+.card:hover .card-acts,
+.card:focus-within .card-acts {
+  display: inline-flex;
+}
+
+.card-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: var(--r-s);
+  color: var(--text-3);
+}
+
+.card-act.danger:hover {
+  background: var(--err-bg);
+  color: var(--err-fg);
 }
 
 .card.done .card-title,

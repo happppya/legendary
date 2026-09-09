@@ -9,7 +9,7 @@
 // the user is mid-edit on the same content.
 
 import { computed, ref, watch } from 'vue'
-import { PhPencilSimple, PhFloppyDisk } from '@phosphor-icons/vue'
+import { PhFloppyDisk, PhPencilSimple } from '@phosphor-icons/vue'
 import type { NodeView } from '../../../types'
 import { mdToHtml } from '../../../lib/markdown'
 
@@ -28,6 +28,9 @@ const emit = defineEmits<{
 const editing = ref(false)
 const draft = ref('')
 const draftTitle = ref('')
+/** True while the pointer hovers the rendered Markdown preview (shows the
+ * floating Edit affordance). */
+const hovered = ref(false)
 /** Content the draft was seeded from, to detect external changes. */
 let seededBody = ''
 let seededTitle = ''
@@ -167,7 +170,9 @@ function onTitleKey(e: KeyboardEvent) {
     />
     <h1 v-else class="be-title ro">{{ node.title }}</h1>
 
-    <!-- body: textarea while editing, preview otherwise -->
+    <!-- body: textarea while editing, preview otherwise. The rendered
+         Markdown carries a hover Edit affordance (test-feedback A-2: "no
+         edit button popup when hovering over MD description"). -->
     <textarea
       v-if="editing"
       v-model="draft"
@@ -176,7 +181,26 @@ function onTitleKey(e: KeyboardEvent) {
       aria-label="Markdown body editor"
       @keydown="onEditorKey"
     ></textarea>
-    <div v-else-if="node.body.trim()" class="markdown" v-html="mdToHtml(node.body)"></div>
+    <div
+      v-else-if="node.body.trim()"
+      class="be-preview"
+      @mouseenter="hovered = true"
+      @mouseleave="hovered = false"
+    >
+      <div class="markdown" v-html="mdToHtml(node.body)"></div>
+      <button
+        v-if="canMutate"
+        type="button"
+        class="be-hover-edit"
+        :class="{ on: hovered }"
+        title="Edit notes"
+        aria-label="Edit notes"
+        @click="startEdit"
+      >
+        <PhPencilSimple :size="11" aria-hidden="true" />
+        Edit
+      </button>
+    </div>
     <p v-else class="be-empty">No notes on this node yet.</p>
 
     <p v-if="editing" class="be-hint">
@@ -327,6 +351,43 @@ function onTitleKey(e: KeyboardEvent) {
 
 .mono {
   font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+}
+
+.be-preview {
+  position: relative;
+  min-width: 0;
+}
+
+.be-hover-edit {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--bg-1);
+  color: var(--text-2);
+  font-size: 11px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  transform: translateY(-3px);
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.be-preview:hover .be-hover-edit {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.be-hover-edit:hover {
+  border-color: var(--gold);
+  color: var(--gold);
 }
 
 .markdown {

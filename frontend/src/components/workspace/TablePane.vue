@@ -12,6 +12,7 @@ import {
   PhDotsThree,
   PhMagnifyingGlass,
   PhPlus,
+  PhTrash,
   PhX,
 } from '@phosphor-icons/vue'
 import type { NodeView } from '../../types'
@@ -27,6 +28,8 @@ const props = defineProps<{
   filters: FilterModel
   selectedId: string | null
   statusCounts: CheckRow[]
+  /** Mutations are desktop-only; the browser fixture preview hides them. */
+  canMutate: boolean
 }>()
 
 const emit = defineEmits<{
@@ -36,6 +39,10 @@ const emit = defineEmits<{
   openFilters: []
   clearFilters: []
   focusSearch: []
+  /** Open the shared New Node dialog (kind preset optional). */
+  create: [kind: string | null]
+  /** Delete a node (App routes through the confirmation modal). */
+  'delete-node': [id: string]
 }>()
 
 /* ---- columns ----------------------------------------------------------- */
@@ -160,10 +167,12 @@ function rowClass(n: NodeView): string {
             <span class="pcount mono">{{ props.statusCounts.find((r) => r.key === p)?.count ?? 0 }}</span>
           </button>
           <button
+            v-if="canMutate"
             type="button"
             class="pill add-pill"
-            title="New node — ships with the editor milestone"
+            title="New node"
             aria-label="New node"
+            @click="emit('create', null)"
           >
             <PhPlus :size="11" aria-hidden="true" />
           </button>
@@ -234,7 +243,18 @@ function rowClass(n: NodeView): string {
               Clear filters
             </button>
             <div class="menu-sep"></div>
-            <div class="menu-item disabled" title="Editor milestone">New node from row…</div>
+            <button
+              v-if="canMutate"
+              type="button"
+              class="menu-item"
+              role="menuitem"
+              :disabled="!selectedId"
+              @click="selectedId && emit('delete-node', selectedId); openMenu = null"
+            >
+              <PhTrash :size="12" aria-hidden="true" />
+              Delete selected node…
+            </button>
+            <div v-else class="menu-item disabled" title="Read-only preview">Delete selected node…</div>
           </div>
         </span>
       </div>

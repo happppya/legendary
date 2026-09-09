@@ -25,6 +25,9 @@ watch(
       searchEl.value?.select()
     })
   },
+  // A reopened panel mounts *after* the focus signal incremented (v-if),
+  // so also react on mount — but never steal focus on a plain app boot.
+  { immediate: true },
 )
 
 const emit = defineEmits<{

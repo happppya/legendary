@@ -16,15 +16,49 @@ export interface SceneLinkDef {
 }
 
 /** Edges restricted to the nodes currently on the scene. `byKey` holds the
- * scene members (spot keys on the mock, node ids elsewhere). */
+ * scene members (node ids — scene items are keyed by node id in every
+ * scope). */
 export function sceneEdges(
   isMockScene: boolean,
   nodesById: Map<string, NodeView>,
   byKey?: Map<string, unknown>,
 ): SceneLinkDef[] {
   if (isMockScene) {
-    if (!byKey) return SCENE_LINKS
-    return SCENE_LINKS.filter((l) => byKey.has(l.from) && byKey.has(l.to))
+    // SCENE_LINKS are authored with curated spot keys (`loc`, `cmc`, …);
+    // the live scene keys items by node id, so normalize each endpoint to
+    // its node id before restricting to the visible members.
+    const idOf = (k: string): string | null => MOCK_BY_KEY.get(k)?.id ?? k
+    const curated: SceneLinkDef[] = []
+    const seen = new Set<string>()
+    for (const l of SCENE_LINKS) {
+      const from = idOf(l.from)
+      const to = idOf(l.to)
+      if (!from || !to) continue
+      if (byKey && (!byKey.has(from) || !byKey.has(to))) continue
+      seen.add(`${from}→${to}`)
+      curated.push({ from, to, dashed: l.dashed })
+    }
+    // Beyond the local scene, fall back to the same derivation the real
+    // realm uses (parent + blocked_by) so non-local scopes are not blank:
+    // curated links stay (they carry the demo's dashed styling) and every
+    // other structural edge is added once, deduped against them.
+    for (const [id, node] of nodesById) {
+      const to = idOf(id)
+      if (!to || (byKey && !byKey.has(to))) continue
+      const from = node.parent ? idOf(node.parent) : null
+      if (from && (!byKey || byKey.has(from)) && !seen.has(`${from}→${to}`)) {
+        seen.add(`${from}→${to}`)
+        curated.push({ from, to })
+      }
+      for (const b of node.blockedBy) {
+        const dep = idOf(b)
+        if (dep && (!byKey || byKey.has(dep)) && !seen.has(`${dep}→${to}`)) {
+          seen.add(`${dep}→${to}`)
+          curated.push({ from: dep, to, dep: true })
+        }
+      }
+    }
+    return curated
   }
   const present = byKey ?? nodesById
   const keyOf = (id: string): string | null => {

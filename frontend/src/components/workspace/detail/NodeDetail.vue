@@ -42,6 +42,7 @@ const emit = defineEmits<{
   'save-title': [title: string]
   'set-status': [status: 'unstarted' | 'active' | 'vanquished']
   'save-meta': [edits: MetaEdits]
+  'move-subgraph': []
 }>()
 
 /* ---- position in the realm ------------------------------------------- */
@@ -91,14 +92,7 @@ const blockedRefs = computed<{ id: string; label: string }[]>(() => {
       @delete-subgraph="emit('delete-subgraph')"
       @wrap="emit('wrap')"
       @reparent-root="emit('reparent-root')"
-    />
-    <NodeActions
-      :node="node"
-      :can-mutate="canMutate"
-      @vanquish="emit('vanquish')"
-      @delete-subgraph="emit('delete-subgraph')"
-      @wrap="emit('wrap')"
-      @reparent-root="emit('reparent-root')"
+      @move-subgraph="emit('move-subgraph')"
     />
   </article>
 
