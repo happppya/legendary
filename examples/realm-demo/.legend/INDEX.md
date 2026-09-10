@@ -4,10 +4,9 @@
 
 |ID|Kind|Title|Status|Landmark|QP|
 |---|---|---|---|---|---|
-|GENRE-3Z8N|Genre|Player Systems|blocked||14|
+|GENRE-3Z8N|Genre|Player Systems rneame|active||27|
 |CARD-4M1P|Card|UI & HUD|active||5|
-|CARD-K9F2|Card|Player Movement & Controller Core|blocked|Landmark_01_Demo|9|
-|ACT-3X7P|Action|Deduct Stamina on Dash Trigger|blocked|Landmark_01_Demo|3|
+|CARD-K9F2|Card|Player Movement & Controller Core|active|Landmark_01_Demo|22|
 |ACT-8J3W|Action|Stamina Bar UI Rendering & Layout|active||5|
-|GRD-7M2Q|Guard|Code Review: Dash Mechanics & Memory Leaks|blocked|Landmark_01_Demo|1|
-|IDEA-5T2P|Idea|Grappling Hook Physics & Momentum Retention|unstarted|Landmark_01_Demo|5|
+|GRD-7M2Q|Guard|Code Review: Dash Mechanics & Memory Leaks|unstarted|Landmark_01_Demo|1|
+|IDEA-5T2P|Idea|Grappling Hook Physics & Momentum Retention|unstarted|Landmark_01_Demo|21|

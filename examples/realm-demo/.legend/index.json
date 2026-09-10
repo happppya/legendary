@@ -1,39 +1,7 @@
 {
-  "generated_at": "2026-09-08T22:52:46Z",
-  "node_count": 7,
+  "generated_at": "2026-09-09T23:22:32Z",
+  "node_count": 6,
   "nodes": {
-    "ACT-3X7P": {
-      "blocked": true,
-      "blocked_by": [
-        "ACT-8J3W"
-      ],
-      "completed_at": null,
-      "created_at": "2026-09-04T18:10:00Z",
-      "disciplines": [
-        "Programming/Locomotion",
-        "Programming/Systems"
-      ],
-      "effective_status": "blocked",
-      "epics": [
-        "Combat_Engine/Locomotion"
-      ],
-      "explicit_landmark": null,
-      "id": "ACT-3X7P",
-      "kind": "action",
-      "landmark": "Landmark_01_Demo",
-      "locked_qp_percent": null,
-      "parent": "CARD-K9F2",
-      "path": "Nodes/ACT-3X7P_dash_stamina_cost.md",
-      "priority": "high",
-      "quest_points": 3,
-      "status": "active",
-      "tags": [
-        "mechanics"
-      ],
-      "title": "Deduct Stamina on Dash Trigger",
-      "total_qp": 3,
-      "validation_error": null
-    },
     "ACT-8J3W": {
       "blocked": false,
       "blocked_by": [],
@@ -96,7 +64,7 @@
       "validation_error": null
     },
     "CARD-K9F2": {
-      "blocked": true,
+      "blocked": false,
       "blocked_by": [],
       "completed_at": null,
       "created_at": "2026-09-04T18:00:00Z",
@@ -104,7 +72,7 @@
         "Programming/Locomotion",
         "Programming/Input"
       ],
-      "effective_status": "blocked",
+      "effective_status": "active",
       "epics": [
         "Combat_Engine/Locomotion",
         "Core_Systems/Player"
@@ -113,7 +81,7 @@
       "id": "CARD-K9F2",
       "kind": "card",
       "landmark": "Landmark_01_Demo",
-      "locked_qp_percent": 44.44444444444444,
+      "locked_qp_percent": 0.0,
       "parent": "GENRE-3Z8N",
       "path": "Nodes/CARD-K9F2_player_controller.md",
       "priority": "high",
@@ -124,47 +92,47 @@
         "locomotion"
       ],
       "title": "Player Movement & Controller Core",
-      "total_qp": 9,
+      "total_qp": 22,
       "validation_error": null
     },
     "GENRE-3Z8N": {
-      "blocked": true,
+      "blocked": false,
       "blocked_by": [],
       "completed_at": null,
       "created_at": "2026-09-04T18:20:00Z",
-      "disciplines": [],
-      "effective_status": "blocked",
+      "disciplines": [
+        "Programming"
+      ],
+      "effective_status": "active",
       "epics": [],
       "explicit_landmark": null,
       "id": "GENRE-3Z8N",
       "kind": "genre",
       "landmark": null,
-      "locked_qp_percent": 28.571428571428573,
+      "locked_qp_percent": 0.0,
       "parent": null,
-      "path": "Nodes/GENRE-3Z8N_player_systems.md",
-      "priority": "medium",
+      "path": "Nodes/GENRE-3Z8N_player_systems_rneame.md",
+      "priority": "high",
       "quest_points": null,
       "status": "active",
       "tags": [
         "genre",
         "player"
       ],
-      "title": "Player Systems",
-      "total_qp": 14,
+      "title": "Player Systems rneame",
+      "total_qp": 27,
       "validation_error": null
     },
     "GRD-7M2Q": {
-      "blocked": true,
-      "blocked_by": [
-        "ACT-3X7P"
-      ],
+      "blocked": false,
+      "blocked_by": [],
       "completed_at": null,
       "created_at": "2026-09-04T18:15:00Z",
       "disciplines": [
         "Programming/Optimization",
         "QualityAssurance"
       ],
-      "effective_status": "blocked",
+      "effective_status": "unstarted",
       "epics": [
         "Combat_Engine/Locomotion"
       ],
@@ -207,14 +175,14 @@
       "parent": "CARD-K9F2",
       "path": "Nodes/IDEA-5T2P_grappling_hook_mechanic.md",
       "priority": "low",
-      "quest_points": 5,
+      "quest_points": 21,
       "status": "unstarted",
       "tags": [
         "concept",
         "pitch"
       ],
       "title": "Grappling Hook Physics & Momentum Retention",
-      "total_qp": 5,
+      "total_qp": 21,
       "validation_error": null
     }
   },
