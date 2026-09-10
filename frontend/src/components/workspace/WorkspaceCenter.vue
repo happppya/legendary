@@ -47,6 +47,8 @@ const emit = defineEmits<{
   openLocal: [id: string]
   /** Create a node (graph toolbar preset: parent id from the selection). */
   create: [parentId: string | null]
+  /** Create a node with explicit parent + kind preset (node actions menu). */
+  'create-kind': [parentId: string | null, kind: string]
   /** Create a node from the table's + (no preset). */
   'create-any': []
   /** Delete a node from the table's more-menu. */
@@ -168,6 +170,7 @@ onBeforeUnmount(() => {
         @reparent="(childId, parentId) => emit('reparent', childId, parentId)"
         @open-local="(id) => emit('openLocal', id)"
         @create="(parentId) => emit('create', parentId)"
+        @create-kind="(parentId, kind) => emit('create-kind', parentId, kind)"
         @close="emit('update:showGraph', false)"
         @update:overlay-mode="emit('update:overlayMode', $event)"
         @update:scope="emit('update:scope', $event)"

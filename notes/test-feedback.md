@@ -3,11 +3,11 @@ Carefully consider the feedback. Then mark as completed only when issue is fully
 # High Priority
 
 
-- [ ] Item A: From the graph view, user should be able to click on a node and then create a new node attached to it from a dropdown of nodes. Add this under the actions menu, and then also offer the actions menu as the dropdown after right clicking on a node.
+- [x] Item A: From the graph view, user should be able to click on a node and then create a new node attached to it from a dropdown of nodes. Add this under the actions menu, and then also offer the actions menu as the dropdown after right clicking on a node.
 
-- [ ] Item B: Bugfix: Item names in table view are not shown. Seems like i can see a little bit of text on the left with enough length but they are getting covered up. 
+- [x] Item B: Bugfix: Item names in table view are not shown. Seems like i can see a little bit of text on the left with enough length but they are getting covered up. 
 
-- [ ] Item C: Make a "zen" mode, toggleable from the command pallete, that acts as a visual centered dashboard for the whole realm. At the center it includes the graph view, except all nodes are more geometric (squares, diamonds, circles) and edges connect to node centers. Nodes and edges are also kind of glowy to get a high tech look. Include other necessary information around the screen but be minimalistic. Zen mode is read only. Watch out for unecessary code repetition.
+- [x] Item C: Make a "zen" mode, toggleable from the command pallete, that acts as a visual centered dashboard for the whole realm. At the center it includes the graph view, except all nodes are more geometric (squares, diamonds, circles) and edges connect to node centers. Nodes and edges are also kind of glowy to get a high tech look. Include other necessary information around the screen but be minimalistic. Zen mode is read only. Watch out for unecessary code repetition.
 
 # Medium Priority
 

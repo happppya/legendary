@@ -22,6 +22,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   PhArrowsOut,
   PhArrowClockwise,
+  PhCaretDown,
   PhCrosshair,
   PhList,
   PhMinus,
@@ -52,6 +53,7 @@ import {
 } from './scene'
 import { applyForces } from './physics'
 import { drawEdges, linkedPairs, sceneEdges } from './edges'
+import NodeActionsMenu from './NodeActionsMenu.vue'
 
 const props = defineProps<{
   nodesById: Map<string, NodeView>
@@ -74,6 +76,9 @@ const emit = defineEmits<{
   'update:completionLevel': [level: CompletionLevel]
   /** Open the shared New Node dialog with the selection as parent preset. */
   create: [parentId: string | null]
+  /** Open the shared New Node dialog with an explicit parent + kind preset
+   * (node actions menu: “New child node…”). */
+  'create-kind': [parentId: string | null, kind: string]
   /** Close the graph tab (reopenable from the tab strip / menu). */
   close: []
   /** Double-click navigation: focus this node's local graph. */
@@ -448,7 +453,72 @@ function toggleLegend() {
   legendOpen.value = !legendOpen.value
 }
 
+/* ---- node actions menu (test-feedback Item A) -----------------------------
+ * One floating menu (NodeActionsMenu.vue), two triggers: the toolbar +
+ * button (acts on the selection) and right-clicking any node (acts on the
+ * clicked node). The menu offers the shared New Node dialog with a kind
+ * preset plus double-click navigation. */
 
+interface ContextMenuState {
+  x: number
+  y: number
+  nodeId: string
+}
+
+const contextMenu = ref<ContextMenuState | null>(null)
+
+/** The node the menu currently acts on (selection for the toolbar trigger). */
+const menuNode = computed<NodeView | null>(() =>
+  contextMenu.value ? (props.nodesById.get(contextMenu.value.nodeId) ?? null) : null,
+)
+
+/** Right-click on a node: anchor the actions menu at the cursor. */
+function onNodeContextMenu(e: MouseEvent, item: SceneItem) {
+  if (props.isMockScene || isOrigin(item)) return
+  e.preventDefault()
+  emit('select', item.node.id)
+  contextMenu.value = { x: e.clientX, y: e.clientY, nodeId: item.node.id }
+}
+
+function closeContextMenu() {
+  contextMenu.value = null
+}
+
+/** Toolbar “new node” button: open the menu anchored to the button itself
+ * (the selection is the actee). Falls back to the old one-click create when
+ * nothing is selected. */
+function onNewNodeButton(e: MouseEvent) {
+  if (!props.selectedId) {
+    emit('create', null)
+    return
+  }
+  const btn = (e.currentTarget as HTMLElement | null)?.getBoundingClientRect()
+  contextMenu.value = {
+    x: btn ? btn.left : e.clientX,
+    y: btn ? btn.bottom + 2 : e.clientY,
+    nodeId: props.selectedId,
+  }
+}
+
+function menuCreateChild(kind: string) {
+  if (!contextMenu.value) return
+  emit('create-kind', contextMenu.value.nodeId, kind)
+  closeContextMenu()
+}
+
+/** Sibling creation: same parent as the actee, chosen kind. */
+function menuCreateSiblingKind(kind: string) {
+  if (!contextMenu.value) return
+  const n = props.nodesById.get(contextMenu.value.nodeId)
+  emit('create-kind', n?.parent ?? null, kind)
+  closeContextMenu()
+}
+
+function menuOpenLocal() {
+  if (!contextMenu.value) return
+  emit('openLocal', contextMenu.value.nodeId)
+  closeContextMenu()
+}
 
 /* ---- overlays (doc 05 §5.3) -------------------------------------------- */
 
@@ -685,16 +755,24 @@ function isOrigin(item: SceneItem): boolean {
           <option value="overview">Genre overview</option>
         </select>
         <span class="tool-divider" aria-hidden="true"></span>
-        <button
-          v-if="!isMockScene"
-          type="button"
-          class="tool-btn"
-          :title="selectedId ? `New node under ${selectedId}` : 'New node (no parent)'"
-          aria-label="New node"
-          @click="emit('create', selectedId)"
-        >
-          <PhPlus :size="12" aria-hidden="true" />
-        </button>
+        <!-- Item A: the + opens the node actions menu (create child/sibling
+             with a kind dropdown) when a node is selected; bare create when
+             nothing is selected. -->
+        <span v-if="!isMockScene" class="rel">
+          <button
+            type="button"
+            class="tool-btn"
+            :class="{ 'tool-on': contextMenu !== null }"
+            :title="selectedId ? 'Node actions: create a child or sibling node' : 'New node (no parent)'"
+            aria-label="New node options"
+            aria-haspopup="menu"
+            @pointerdown.stop
+            @click="onNewNodeButton($event)"
+          >
+            <PhPlus :size="12" aria-hidden="true" />
+            <PhCaretDown v-if="selectedId" :size="8" class="plus-caret" aria-hidden="true" />
+          </button>
+        </span>
         <span v-if="!isMockScene" class="tool-divider" aria-hidden="true"></span>
         <button
           type="button"
@@ -819,6 +897,7 @@ function isOrigin(item: SceneItem): boolean {
               :transform="`scale(${isOrigin(item) ? 1 : scaleFor(item)})`"
               :style="isOrigin(item) ? undefined : { transformOrigin: `${item.x}px ${item.y}px`, transformBox: 'fill-box' }"
               @pointerdown="onPointerDown($event, item)"
+              @contextmenu.prevent="onNodeContextMenu($event, item)"
               @click="onClickItem(item)"
             >
               <title>{{ KIND_LABEL[item.node.kind] }} — {{ item.node.title }} ({{ item.node.effectiveStatus }})</title>
@@ -931,6 +1010,18 @@ function isOrigin(item: SceneItem): boolean {
             />
           </svg>
         </div>
+
+        <!-- Node actions menu (Item A): floats above the canvas at any
+             zoom/pan; kind dropdown opens the shared New Node dialog. -->
+        <NodeActionsMenu
+          :node="menuNode"
+          :x="contextMenu?.x ?? 0"
+          :y="contextMenu?.y ?? 0"
+          @create-child="menuCreateChild"
+          @create-sibling-kind="menuCreateSiblingKind"
+          @open-local="menuOpenLocal"
+          @close="closeContextMenu"
+        />
 
         <div v-if="legendOpen" class="legend" aria-label="Legend">
           <button
@@ -1556,6 +1647,17 @@ function isOrigin(item: SceneItem): boolean {
   max-width: 420px;
   font-size: 12px;
   color: var(--faint);
+}
+
+/* ---- node actions menu trigger (Item A) ------------------------------------ */
+
+.rel {
+  position: relative;
+}
+
+.plus-caret {
+  margin-left: -3px;
+  opacity: 0.7;
 }
 
 @media (prefers-reduced-motion: reduce) {

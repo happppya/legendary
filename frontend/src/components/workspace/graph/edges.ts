@@ -112,14 +112,20 @@ export function midpointAnchor(a: SceneItem, b: SceneItem): [number, number] {
   return [a.x, a.y + (dy >= 0 ? 1 : -1) * (a.h / 2)]
 }
 
-/** Draw each edge between its endpoints' midpoint anchors. */
-export function drawEdges(items: SceneItem[], defs: SceneLinkDef[]): DrawnEdge[] {
+/** Draw each edge between its endpoints' midpoint anchors. With
+ * `centerAnchors` (zen mode), edges run centre-to-centre instead — nodes
+ * render above them, so the lines visually terminate under each shape. */
+export function drawEdges(items: SceneItem[], defs: SceneLinkDef[], centerAnchors = false): DrawnEdge[] {
   const byKey = new Map(items.map((s) => [s.key, s]))
   const out: DrawnEdge[] = []
   for (const link of defs) {
     const a = byKey.get(link.from)
     const b = byKey.get(link.to)
     if (!a || !b) continue
+    if (centerAnchors) {
+      out.push({ dashed: !!link.dashed, dep: !!link.dep, x1: a.x, y1: a.y, x2: b.x, y2: b.y })
+      continue
+    }
     const [x1, y1] = midpointAnchor(a, b)
     const [x2, y2] = midpointAnchor(b, a)
     out.push({

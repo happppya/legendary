@@ -264,10 +264,14 @@ function rowClass(n: NodeView): string {
       <table class="grid" :class="{ 'has-more': openMenu !== null }">
         <thead>
           <tr>
+            <!-- the col-* width class must live on the <th>: under
+                 table-layout:fixed only the first row's widths count, so
+                 without it every column collapses to equal width and the
+                 Name column gets covered (test-feedback Item B). -->
             <th
               v-for="c in COLS.filter((c) => !hiddenCols.has(c.key))"
               :key="c.key"
-              :class="{ sortable: true, sorted: sort?.key === c.key }"
+              :class="[`col-${c.key}`, { sortable: true, sorted: sort?.key === c.key }]"
               @click="sortBy(c.key)"
             >
               <span class="th-label">{{ c.label }}</span>
@@ -289,11 +293,16 @@ function rowClass(n: NodeView): string {
             @click="emit('select', n.id)"
           >
             <td class="col-title">
-              <span class="kind-tile" :class="n.kind" :title="`${KIND_LABEL[n.kind]} node`">
-                <component :is="KIND_ICON[n.kind]" :size="10" aria-hidden="true" />
-              </span>
-              <span class="t-title" :title="n.title">{{ n.title }}</span>
-              <span class="t-id mono">{{ n.id }}</span>
+              <!-- flex layout lives on an inner wrapper: display:flex on the
+                   <td> itself breaks the fixed table layout and the name
+                   gets covered (test-feedback Item B). -->
+              <div class="title-cell">
+                <span class="kind-tile" :class="n.kind" :title="`${KIND_LABEL[n.kind]} node`">
+                  <component :is="KIND_ICON[n.kind]" :size="10" aria-hidden="true" />
+                </span>
+                <span class="t-title" :title="n.title">{{ n.title }}</span>
+                <span class="t-id mono">{{ n.id }}</span>
+              </div>
             </td>
             <td class="col-kind mono">{{ KIND_LABEL[n.kind] }}</td>
             <td class="col-status">
@@ -695,17 +704,20 @@ tr.done .t-title {
   width: 13%;
 }
 
-.col-title {
+.title-cell {
   display: flex;
   align-items: center;
   gap: 7px;
   min-width: 0;
+  width: 100%;
 }
 
 .t-title {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .t-id {

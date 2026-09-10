@@ -28,6 +28,7 @@ import CalendarView from './components/pages/CalendarView.vue'
 import EntitiesView from './components/pages/EntitiesView.vue'
 import LandmarkMatrix from './components/pages/LandmarkMatrix.vue'
 import SettingsView from './components/pages/SettingsView.vue'
+import ZenView from './components/pages/ZenView.vue'
 import CommandPalette, { type PaletteCommand } from './components/overlays/CommandPalette.vue'
 import AboutDialog from './components/overlays/AboutDialog.vue'
 import OpenRealmDialog from './components/overlays/OpenRealmDialog.vue'
@@ -69,6 +70,10 @@ import type { GraphScope } from './components/workspace/graph/scene'
 import { MOCK_BY_KEY, MOCK_NODES, MOCK_REALM } from './lib/mockRealm'
 
 type Page = 'workspace' | 'board' | 'entities' | 'calendar' | 'matrix' | 'settings'
+
+/** Zen mode (Item C): a full-bleed read-only dashboard overlay. Kept
+ * separate from `page` so leaving and returning restores the exact view. */
+const zenMode = ref(false)
 
 /* ---- theme ------------------------------------------------------------- */
 
@@ -508,6 +513,11 @@ function requestCreate(preset: { kind?: string | null; parent?: string | null; s
   }
 }
 
+/** Node actions menu (graph view): explicit parent + kind preset. */
+function onCreateKind(parentId: string | null, kind: string) {
+  requestCreate({ parent: parentId, kind })
+}
+
 async function confirmCreate(args: {
   kind: string
   title: string
@@ -715,6 +725,7 @@ const paletteCommands = computed<PaletteCommand[]>(() => {
     out.push({ id: 'node.vanquish', title: 'Vanquish node', hint: 'Ctrl+Enter' })
     out.push({ id: 'node.wrapshortcut', title: 'Wrap in Card Group', hint: 'Ctrl+Shift+W' })
   }
+  out.push({ id: 'view.zen', title: 'Zen mode', hint: 'read-only dashboard · Esc to exit' })
   out.push({ id: 'view.workspace', title: 'Open Explorer workspace' })
   out.push({ id: 'view.board', title: 'Switch to Board View' })
   out.push({ id: 'view.matrix', title: 'Open Landmark Matrix' })
@@ -991,6 +1002,9 @@ async function runMenu(id: string) {
     case 'view.theme.light':
       setTheme('light')
       break
+    case 'view.zen':
+      zenMode.value = true
+      break
     case 'go.parent': {
       const p = selected.value?.parent
       if (p) select(p)
@@ -1075,6 +1089,13 @@ function onGlobalKey(e: KeyboardEvent) {
   const mod = e.ctrlKey || e.metaKey
 
   if (typing && !(e.key === 'Escape')) return
+
+  // Zen mode (Item C): Escape always leaves the dashboard, even over the
+  // palette or dialogs.
+  if (e.key === 'Escape' && zenMode.value) {
+    zenMode.value = false
+    return
+  }
 
   if (mod && e.key.toLowerCase() === 'k') {
     e.preventDefault()
@@ -1165,6 +1186,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
 
 <template>
   <div class="shell">
+    <!-- Zen mode (Item C): full-bleed read-only dashboard above everything
+         except the palette, which must stay reachable to leave via command. -->
+    <ZenView
+      v-if="zenMode"
+      :nodes="nodes"
+      :nodes-by-id="nodesById"
+      :realm-name="realmName"
+      @close="zenMode = false"
+    />
+
+    <template v-if="!zenMode">
     <TopBar :menus="menus" @run="runMenu" @palette="togglePalette()" />
 
     <div class="app-body">
@@ -1240,6 +1272,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
           @reparent="onGraphDropReparent"
           @open-local="openLocalGraph"
           @create="requestCreate({ parent: $event })"
+          @create-kind="onCreateKind"
           @create-any="requestCreate()"
           @delete-node="requestDeleteById"
           @update:overlay-mode="overlayMode = $event"
@@ -1362,6 +1395,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
     </div>
 
     <StatusBar
+      v-if="!zenMode"
       :nodes="totals.nodes"
       :links="totals.links"
       :realm-name="realmName"
@@ -1370,7 +1404,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
       :error="error || mutationError"
     />
 
-    <!-- command palette -->
+    <!-- command palette: outside the zen toggle, so zen stays escapable
+         via ⌘K as well as Escape -->
     <CommandPalette
       v-if="paletteOpen"
       :nodes="nodes"
@@ -1424,6 +1459,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
       @submit="submitOpen"
     />
     <NewRealmDialog v-if="dialog === 'new'" @close="dialog = null" />
+    </template>
   </div>
 </template>
 

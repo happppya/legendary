@@ -38,12 +38,16 @@ const parent = ref<string | ''>(props.initialParent ?? '')
 const priority = ref('medium')
 const qpRaw = ref('')
 
-/** Parents: every container kind (Card / Genre) in the realm. */
-const parents = computed(() =>
-  props.nodes
-    .filter((n) => n.kind === 'card' || n.kind === 'genre')
-    .sort((a, b) => a.title.localeCompare(b.title)),
-)
+/** Parents: every container kind (Card / Genre) in the realm. The preset
+ * parent from the graph actions menu is always included — the engine accepts
+ * any existing node as parent, so a leaf actee must not silently vanish from
+ * the list (test-feedback Item A). */
+const parents = computed(() => {
+  const candidates = props.nodes.filter(
+    (n) => isContainerKind(n.kind) || n.id === (props.initialParent ?? ''),
+  )
+  return candidates.sort((a, b) => a.title.localeCompare(b.title))
+})
 
 /** A leaf kind is required under the doc-02 vocabulary; keep the default
  * honest when the caller presets a container kind without a parent.
