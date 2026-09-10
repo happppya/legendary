@@ -9,14 +9,11 @@ import {
   PhCaretDown,
   PhCaretRight,
   PhCompass,
-  PhGearSix,
-  PhGraph,
   PhKanban,
   PhLinkSimple,
   PhMagnifyingGlass,
   PhShapes,
   PhSquaresFour,
-  PhTable,
   PhTrash,
   PhTree,
 } from '@phosphor-icons/vue'
@@ -156,16 +153,16 @@ interface ViewRow {
   sep?: boolean
 }
 
-/** View switcher rows - every top-level page lives here now. */
+/** View switcher rows - every top-level page lives here now. The Explorer
+ * workspace already contains the graph and table panes (they are tabs, not
+ * separate pages), so there are no Graph/Table rows (test-feedback Bug7);
+ * Settings moved under the File menu (Bug8). */
 const VIEWS: ViewRow[] = [
   { id: 'workspace', label: 'Explorer', icon: PhCompass },
-  { id: 'graph', label: 'Graph View', icon: PhGraph },
-  { id: 'table', label: 'Table View', icon: PhTable },
   { id: 'board', label: 'Board View', icon: PhKanban },
   { id: 'matrix', label: 'Landmark Matrix', icon: PhSquaresFour },
   { id: 'calendar', label: 'Calendar', icon: PhCalendarBlank },
   { id: 'entities', label: 'Entities', icon: PhShapes },
-  { id: 'settings', label: 'Settings', icon: PhGearSix, sep: true },
 ]
 </script>
 

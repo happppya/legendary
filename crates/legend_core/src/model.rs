@@ -165,12 +165,16 @@ impl std::str::FromStr for Priority {
     }
 }
 
-/// Fibonacci estimation points (spec §4.4).
+/// Fibonacci estimation points (spec §4.4). Recommended — not enforced —
+/// for `quest_points`: the UI offers these as one-click options.
 pub const FIBONACCI_POINTS: [u32; 7] = [1, 2, 3, 5, 8, 13, 21];
 
-/// Quest Point values are restricted to the Fibonacci set.
+/// Quest Point values are free-form within `0..=QUEST_POINTS_MAX`;
+/// Fibonacci amounts are only recommended (test-feedback Bug3).
+pub const QUEST_POINTS_MAX: u32 = 9999;
+
 pub fn is_valid_quest_points(n: u32) -> bool {
-    FIBONACCI_POINTS.contains(&n)
+    n <= QUEST_POINTS_MAX
 }
 
 /// A single graph entity: composable frontmatter components.
@@ -260,9 +264,13 @@ mod tests {
 
     #[test]
     fn fibonacci_points_only() {
-        assert!(is_valid_quest_points(3));
-        assert!(is_valid_quest_points(21));
-        assert!(!is_valid_quest_points(4));
-        assert!(!is_valid_quest_points(0));
+        // Fibonacci values remain the recommended set…
+        assert_eq!(FIBONACCI_POINTS, [1, 2, 3, 5, 8, 13, 21]);
+        // …but any amount in the accepted range is valid now (Bug3).
+        assert!(is_valid_quest_points(0));
+        assert!(is_valid_quest_points(4));
+        assert!(is_valid_quest_points(7));
+        assert!(is_valid_quest_points(QUEST_POINTS_MAX));
+        assert!(!is_valid_quest_points(QUEST_POINTS_MAX + 1));
     }
 }

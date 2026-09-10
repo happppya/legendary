@@ -11,8 +11,10 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { PhPlus, PhX } from '@phosphor-icons/vue'
 import type { NodeView } from '../../types'
-import { KIND_ICON, KIND_LABEL, KINDS } from '../../lib/kind'
+import { KIND_ICON, KIND_LABEL, KINDS, isContainerKind } from '../../lib/kind'
 import { PRIORITY_KEYS, PRIORITY_LABEL } from '../../lib/priority'
+import { parseQp } from '../../lib/qp'
+import QpPicker from '../controls/QpPicker.vue'
 
 const props = defineProps<{
   /** Full realm snapshot (parent candidates). */
@@ -44,16 +46,13 @@ const parents = computed(() =>
 )
 
 /** A leaf kind is required under the doc-02 vocabulary; keep the default
- * honest when the caller presets a container kind without a parent. */
-const qpRequired = computed(() => !isContainer(kind.value))
+ * honest when the caller presets a container kind without a parent.
+ * QP is free-form 0–9999 now (Bug3); Fibonacci is only recommended. */
+const qpRequired = computed(() => !isContainerKind(kind.value))
 const qpInvalid = computed(() => {
   if (!qpRequired.value || qpRaw.value.trim() === '') return false
-  return ![1, 2, 3, 5, 8, 13, 21].includes(Number(qpRaw.value))
+  return parseQp(qpRaw.value) === 'invalid'
 })
-
-function isContainer(k: string): boolean {
-  return k === 'card' || k === 'genre'
-}
 
 const titleInvalid = computed(() => title.value.trim() === '')
 
@@ -92,7 +91,7 @@ onMounted(() => {
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 watch(kind, (k) => {
-  if (!isContainer(k) && qpRaw.value.trim() === '') qpRaw.value = '3'
+  if (!isContainerKind(k) && qpRaw.value.trim() === '') qpRaw.value = '3'
 })
 </script>
 
@@ -157,20 +156,8 @@ watch(kind, (k) => {
       </div>
 
       <label class="fld">
-        <span class="fld-label">
-          Quest points
-          <span v-if="isContainer(kind)" class="fld-hint">(aggregate over children — leave empty)</span>
-        </span>
-        <input
-          v-model="qpRaw"
-          class="fld-input mono"
-          :class="{ invalid: qpInvalid }"
-          type="text"
-          inputmode="numeric"
-          placeholder="1 · 2 · 3 · 5 · 8 · 13 · 21"
-          aria-label="Quest points"
-        />
-        <span v-if="qpInvalid" class="fld-err">Quest points must be Fibonacci: 1, 2, 3, 5, 8, 13, 21.</span>
+        <span class="fld-label">Quest points</span>
+        <QpPicker v-model="qpRaw" :invalid="qpInvalid" :disabled="!qpRequired" />
       </label>
 
       <p v-if="error" class="dlg-error">{{ error }}</p>
@@ -312,11 +299,6 @@ watch(kind, (k) => {
 
 .fld-input.mono {
   font-family: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
-}
-
-.fld-err {
-  font-size: 10.5px;
-  color: var(--err-fg);
 }
 
 .kind-row {

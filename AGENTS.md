@@ -40,7 +40,8 @@ cargo run -p legend_cli -- --realm examples/realm-demo tree CARD-K9F2
 - The UI's **default demo scene** is hand-authored in `frontend/src/lib/mockRealm.ts` (RAW entries + NodeView compiler) and is what App boots into — editing `examples/realm-demo/` or the fixture does not change it.
 - `frontend/public/realm-demo.json` is a *different* fallback: the browser (non-Tauri) `openRealm` fetch, generated from `examples/realm-demo` via `npm --prefix frontend run fixture` (`scripts/make-demo-fixture.mjs`). Regenerate it only when that sample realm changes.
 - `mockRealm.ts` is demo content only. Shared, realm-agnostic logic lives in `lib/filters.ts` (filter model/matching/rows/taxonomy) and `lib/node.ts` (`qpOf`, `ancestorChain`, link stats); kind/status/priority keys+labels+ranks are single-sourced in `lib/kind.ts`/`lib/status.ts`/`lib/priority.ts`. Do not re-declare those maps in components.
-- Components are grouped by role under `components/`: `shell/`, `overlays/` (palette + dialogs), `pages/`, `workspace/` (with `workspace/graph/` and `workspace/detail/` holding the split physics/scene/edges modules and NodeDetail leaf components).
+- Components are grouped by role under `components/`: `shell/`, `overlays/` (palette + dialogs), `pages/`, `controls/` (reusable form widgets shared across views, e.g. `QpPicker`), `workspace/` (with `workspace/graph/` and `workspace/detail/` holding the split physics/scene/edges modules and NodeDetail leaf components).
+- View vocabulary is single-sourced in `lib/`: quest points in `lib/qp.ts` (`QP_CHOICES`, `parseQp`; Fibonacci is recommended, 0–9999 accepted), plus the kind/status/priority maps. Do not re-declare those in components.
 
 ## Environment & editing gotchas
 

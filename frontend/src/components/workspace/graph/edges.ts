@@ -98,7 +98,21 @@ export interface DrawnEdge {
   y2: number
 }
 
-/** Clamp each edge to the shape boundary of its endpoints. */
+/** Edge anchor on `a`'s boundary toward `b`: always a midpoint (left/right
+ * centre or centre top/bottom — test-feedback Bug5), never a corner. The
+ * dominant axis of the centre-to-centre delta picks the side, so short
+ * wide nodes and tall narrow nodes both connect at visually sensible spots. */
+export function midpointAnchor(a: SceneItem, b: SceneItem): [number, number] {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  if (dx === 0 && dy === 0) return [a.x, a.y]
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return [a.x + (dx >= 0 ? 1 : -1) * (a.w / 2), a.y]
+  }
+  return [a.x, a.y + (dy >= 0 ? 1 : -1) * (a.h / 2)]
+}
+
+/** Draw each edge between its endpoints' midpoint anchors. */
 export function drawEdges(items: SceneItem[], defs: SceneLinkDef[]): DrawnEdge[] {
   const byKey = new Map(items.map((s) => [s.key, s]))
   const out: DrawnEdge[] = []
@@ -106,17 +120,15 @@ export function drawEdges(items: SceneItem[], defs: SceneLinkDef[]): DrawnEdge[]
     const a = byKey.get(link.from)
     const b = byKey.get(link.to)
     if (!a || !b) continue
-    const ax = a.x + (a.x < b.x ? a.w / 2 : a.x > b.x ? -a.w / 2 : 0)
-    const ay = a.y + (a.y < b.y ? a.h / 2 : a.y > b.y ? -a.h / 2 : 0)
-    const bx = b.x + (b.x > a.x ? -b.w / 2 : b.x < a.x ? b.w / 2 : 0)
-    const by = b.y + (b.y > a.y ? -b.h / 2 : b.y < a.y ? b.h / 2 : 0)
+    const [x1, y1] = midpointAnchor(a, b)
+    const [x2, y2] = midpointAnchor(b, a)
     out.push({
       dashed: !!link.dashed,
       dep: !!link.dep,
-      x1: ax,
-      y1: ay,
-      x2: bx,
-      y2: by,
+      x1,
+      y1,
+      x2,
+      y2,
     })
   }
   return out

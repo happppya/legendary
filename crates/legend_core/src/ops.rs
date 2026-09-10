@@ -28,7 +28,9 @@ pub enum OpsError {
     UnknownParent(String),
     #[error("CycleDetectedError: reparenting {id} under {parent} would close a cycle")]
     CycleDetected { id: String, parent: String },
-    #[error("quest_points must be Fibonacci: 1, 2, 3, 5, 8, 13, 21")]
+    #[error(
+        "quest_points must be between 0 and 9999 (Fibonacci 1, 2, 3, 5, 8, 13, 21 recommended)"
+    )]
     InvalidQuestPoints,
     #[error("`blocked` is a computed runtime state and cannot be set; resolve or vanquish its prerequisites instead")]
     BlockedNotSettable,
@@ -646,12 +648,26 @@ mod tests {
                     title: "x".into(),
                     parent: None,
                     priority: Priority::Medium,
-                    quest_points: Some(4),
+                    // Out of range (0–9999): rejected.
+                    quest_points: Some(10_000),
                 }
             )
             .unwrap_err(),
             OpsError::InvalidQuestPoints
         );
+        // In-range but non-Fibonacci: accepted (Bug3).
+        let qp_ok = create(
+            &mut realm,
+            CreateArgs {
+                kind: NodeKind::Action,
+                title: "custom qp".into(),
+                parent: None,
+                priority: Priority::Medium,
+                quest_points: Some(4),
+            },
+        )
+        .unwrap();
+        assert_eq!(realm.nodes[&qp_ok.created[0]].node.quest_points, Some(4));
     }
 
     #[test]
@@ -923,19 +939,30 @@ mod tests {
         assert_eq!(n.quest_points, Some(8));
         assert_eq!(n.tags, vec!["movement".to_string(), "core".to_string()]);
 
-        // Non-Fibonacci QP is rejected.
+        // QP outside the accepted range (0–9999) is rejected.
         assert_eq!(
             update_components(
                 &mut realm,
                 &act,
                 ComponentEdits {
-                    quest_points: Some(Some(4)),
+                    quest_points: Some(Some(10_000)),
                     ..Default::default()
                 }
             )
             .unwrap_err(),
             OpsError::InvalidQuestPoints
         );
+        // …but a non-Fibonacci amount inside the range is fine now (Bug3).
+        update_components(
+            &mut realm,
+            &act,
+            ComponentEdits {
+                quest_points: Some(Some(4)),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(realm.nodes[&act].node.quest_points, Some(4));
 
         // Unknown dependency and self-dependency are rejected.
         assert_eq!(

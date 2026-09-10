@@ -23,6 +23,7 @@ import {
   PhArrowsOut,
   PhArrowClockwise,
   PhCrosshair,
+  PhList,
   PhMinus,
   PhPause,
   PhPlay,
@@ -192,11 +193,32 @@ function onPointerDown(e: PointerEvent, item: SceneItem) {
   window.addEventListener('pointerup', onPointerUp)
 }
 
+/* ---- single vs double click (test-feedback Bug9) -------------------------
+ * The native `dblclick` event is unreliable here: `onPointerDown` calls
+ * `preventDefault()`, which suppresses the compatibility mouse events the
+ * browser uses to reset its click-`detail` counter — after the first
+ * double-click, later clicks get miscounted. So we detect the second click
+ * ourselves with an explicit per-node timer; a double-click is registered
+ * exactly on the *second* click, and every single click stays a selection. */
+
+const DBL_CLICK_MS = 450
+let lastClickKey: string | null = null
+let lastClickAt = 0
+
 function onClickItem(item: SceneItem) {
   if (suppressClick.value) {
     suppressClick.value = false
     return
   }
+  const now = performance.now()
+  if (lastClickKey === item.key && now - lastClickAt < DBL_CLICK_MS) {
+    lastClickKey = null
+    lastClickAt = 0
+    onDblClickItem(item)
+    return
+  }
+  lastClickKey = item.key
+  lastClickAt = now
   emit('select', item.node.id)
 }
 
@@ -416,9 +438,17 @@ const LEGEND_SHAPES = [
   { key: 'idea', label: 'Idea' },
 ] as const
 
-function statusDotClass(status: string): string {
-  return `st-${status}`
+/* ---- legend visibility (test-feedback Bug6): closeable, reopenable ------- */
+
+/** Component-local so a refresh restores it; the legend stays per-session
+ * state rather than a realm setting. */
+const legendOpen = ref(true)
+
+function toggleLegend() {
+  legendOpen.value = !legendOpen.value
 }
+
+
 
 /* ---- overlays (doc 05 §5.3) -------------------------------------------- */
 
@@ -702,6 +732,17 @@ function isOrigin(item: SceneItem): boolean {
           <PhCrosshair :size="12" aria-hidden="true" />
         </button>
         <span class="tool-divider" aria-hidden="true"></span>
+        <button
+          type="button"
+          class="tool-btn"
+          :class="{ 'tool-on': legendOpen }"
+          :title="legendOpen ? 'Hide legend' : 'Show legend'"
+          :aria-label="legendOpen ? 'Hide legend' : 'Show legend'"
+          :aria-pressed="legendOpen"
+          @click="toggleLegend"
+        >
+          <PhList :size="12" aria-hidden="true" />
+        </button>
         <select
           class="overlay-select"
           :value="overlayMode"
@@ -779,7 +820,6 @@ function isOrigin(item: SceneItem): boolean {
               :style="isOrigin(item) ? undefined : { transformOrigin: `${item.x}px ${item.y}px`, transformBox: 'fill-box' }"
               @pointerdown="onPointerDown($event, item)"
               @click="onClickItem(item)"
-              @dblclick.stop="onDblClickItem(item)"
             >
               <title>{{ KIND_LABEL[item.node.kind] }} — {{ item.node.title }} ({{ item.node.effectiveStatus }})</title>
 
@@ -808,17 +848,10 @@ function isOrigin(item: SceneItem): boolean {
                   rx="12"
                   :style="strokeStyleFor(item)"
                 />
-                <circle
-                  class="shape-dot"
-                  :class="statusDotClass(item.node.effectiveStatus)"
-                  :cx="item.x - item.w / 2 + 15"
-                  :cy="item.y"
-                  r="3.6"
-                />
-                <text class="node-title card" :x="item.x - item.w / 2 + 27" :y="item.y - 2">
+                <text class="node-title card" :x="item.x - item.w / 2 + 16" :y="item.y - 2">
                   {{ trunc(item.node.title, 26) }}
                 </text>
-                <text class="node-sub mono" :x="item.x - item.w / 2 + 27" :y="item.y + 14">
+                <text class="node-sub mono" :x="item.x - item.w / 2 + 16" :y="item.y + 14">
                   {{ item.node.id }}
                 </text>
                 <g v-if="item.node.totalQp > 0" class="qp-chip">
@@ -856,14 +889,7 @@ function isOrigin(item: SceneItem): boolean {
                   rx="15"
                   :style="strokeStyleFor(item)"
                 />
-                <circle
-                  class="shape-dot"
-                  :class="statusDotClass(item.node.effectiveStatus)"
-                  :cx="item.x - item.w / 2 + 15"
-                  :cy="item.y"
-                  r="3"
-                />
-                <text class="node-title" :x="item.x - item.w / 2 + 26" :y="item.y + 3.6">
+                <text class="node-title" :x="item.x - item.w / 2 + 15" :y="item.y + 3.6">
                   {{ trunc(item.node.title, 25) }}
                 </text>
               </g>
@@ -873,13 +899,6 @@ function isOrigin(item: SceneItem): boolean {
                   class="shape shape-guard"
                   :d="`M ${item.x} ${item.y - item.h / 2} L ${item.x + item.w / 2} ${item.y} L ${item.x} ${item.y + item.h / 2} L ${item.x - item.w / 2} ${item.y} Z`"
                   :style="strokeStyleFor(item)"
-                />
-                <circle
-                  class="shape-dot guard-dot"
-                  :class="statusDotClass(item.node.effectiveStatus)"
-                  :cx="item.x"
-                  :cy="item.y - 8"
-                  r="2.6"
                 />
                 <text class="node-guard mono" :x="item.x" :y="item.y + item.h / 2 + 12">
                   {{ trunc(item.node.title, 14).toUpperCase() }}
@@ -913,7 +932,16 @@ function isOrigin(item: SceneItem): boolean {
           </svg>
         </div>
 
-        <div class="legend" aria-label="Legend">
+        <div v-if="legendOpen" class="legend" aria-label="Legend">
+          <button
+            type="button"
+            class="legend-close"
+            title="Hide legend"
+            aria-label="Hide legend"
+            @click="legendOpen = false"
+          >
+            <PhX :size="10" aria-hidden="true" />
+          </button>
           <div class="legend-shapes">
             <span v-for="s in LEGEND_SHAPES" :key="s.key" class="legend-row">
               <i class="glyph g-shape" :class="`g-${s.key}`" aria-hidden="true"></i>
@@ -1214,15 +1242,6 @@ function isOrigin(item: SceneItem): boolean {
   stroke-width: 1.8;
 }
 
-.shape-dot {
-  opacity: 0.95;
-}
-
-.guard-dot {
-  stroke: var(--graph-canvas);
-  stroke-width: 1.5;
-}
-
 .node-title {
   fill: var(--text-1);
   font-size: 12px;
@@ -1256,22 +1275,6 @@ function isOrigin(item: SceneItem): boolean {
   fill: var(--gold);
   font-size: 9px;
   text-anchor: middle;
-}
-
-.st-unstarted {
-  fill: var(--dot-unstarted);
-}
-
-.st-active {
-  fill: var(--dot-active);
-}
-
-.st-blocked {
-  fill: var(--dot-blocked);
-}
-
-.st-vanquished {
-  fill: var(--dot-done);
 }
 
 /* ---- overlays ------------------------------------------------------------- */
@@ -1338,6 +1341,28 @@ function isOrigin(item: SceneItem): boolean {
   backdrop-filter: blur(2px);
   font-size: 10px;
   color: var(--text-3);
+}
+
+.legend-close {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--r-s);
+  color: var(--text-3);
+}
+
+.legend-close:hover {
+  color: var(--text-1);
+  background: var(--bg-3);
+}
+
+.tool-btn.tool-on {
+  color: var(--gold);
 }
 
 .legend-shapes,

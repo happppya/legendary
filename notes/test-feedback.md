@@ -2,22 +2,30 @@ Carefully consider the feedback. Then mark as completed only when issue is fully
 
 # High Priority
 
-- [ ] A: Missing a lot of fundamental UX
-    - [x] Bug A-1: No way to intuitively move between different root nodes in the graph view. For example, in the example realm, Character Movement is under Locomotion System under Combat Engine. However, there is no way to view switch between nodes under Locomation System nor Combat Engine. 
-        - [x] Feature A-a: User should be able to go to a global graph view that shows every node in the entire realm.
-        - [x] Feature A-b: Category organization
-            - [x] Feature: Add a genre node that functions the same as a card node. But it will be used for broader categorizations like "Combat Engine" and "Locomotion System".
-            - [x] Feature: User should be able to go to a kind of overview graph view that shows the root node (realm root) that branches off covering the entire realm, terminating after it hits a card node, action node, idea node, etc... The only node it doesn't terminate is when it hits a genre node, so the final result will show all genre nodes and their immediate children.
-    - [x] Bug A-2: User has no way to intuitively manipulate items. They should be able to create, delete, modify all types of nodes from all views (graph, table, board, matrix, etc...)
-        - [x] Bug: Plus button in board view does nothing
-        - [x] Bug: No edit button popup when hovering over MD description of a node
-    - [x] Bug A-3: When the user closes the filters menu in the explorer view, there is no way to open it up again
-    - [x] Bug A-4: Explorer view that merges multiple views is left mostly unimplemented. It opens graph and table by default, but there is no way to open new menus once one gets closed. Explorer view also doesnt save state when the user go to another view and them come back.
 
-- [ ] Bug B: Item names in table view are not shown
+- [ ] Item A: From the graph view, user should be able to click on a node and then create a new node attached to it from a dropdown of nodes. Add this under the actions menu, and then also offer the actions menu as the dropdown after right clicking on a node.
+
+- [ ] Item B: Bugfix: Item names in table view are not shown. Seems like i can see a little bit of text on the left with enough length but they are getting covered up. 
+
+- [ ] Item C: Make a "zen" mode, toggleable from the command pallete, that acts as a visual centered dashboard for the whole realm. At the center it includes the graph view, except all nodes are more geometric (squares, diamonds, circles) and edges connect to node centers. Nodes and edges are also kind of glowy to get a high tech look. Include other necessary information around the screen but be minimalistic. Zen mode is read only. Watch out for unecessary code repetition.
 
 # Medium Priority
 
-- [ ] Bug: Custom header at the top in desktop view works but doesn't allow dragging for movement of the window.
-- [ ] Bug: Minimize, maximize, close buttons on the desktop version don't work
+- [x] Bug1: Custom header at the top in desktop view works but doesn't allow dragging for movement of the window.
+- [x] Bug2: Minimize, maximize, close buttons on the desktop version don't work
+- [x] Bug3: Fibonacci quest points should not be enforced, just recommended. Replace the quest points textbox with button options for fibonacci amounts: 1,2,3,5,8... Then on the last box is a textbox where the user can enter any custom amount between 0 and 9999
 
+- [x] Bug4: Highlighting epics or disciplines under a node and then clicking save components will add those same items, duplicating them and causing some weird bugs. Don't allow duplicates, but this behavior doesn't make sense either. Instead there should be an X popup when hovering over epics and disciplines allowing user to remove them. And adding new ones should come from pressing a plus button to open a dropdown menu.
+
+- [x] Bug5: UI for node items in graph view needs improvements:
+     - [x] Remove the colored dot, no use
+     - [x] Sometimes edges (the lines that connect nodes) don't connect correctly to the node corners
+     - [x] For nodes that visually have little height, it looks weird when edges connect to corners. Instead all edges should connect to the middle part of nodes (left center, right center, center top, center bottom)
+
+- [x] Bug6: Legend for graph view sometimes is in the way but its still important information. Allow the user to close and reopen it.
+- [x] Bug7: Explorer, graph, and table view buttons go to the same page. Just get rid of graph and table view since explorer already has them all.
+- [x] Bug8: Settings button should be under the File dropdown, not on the sidebar.
+
+- [x] Bug9: After double clicking on a node for the first time, all later clicks on a node are counted as double clicks on the first click instead of the second.
+
+- [ ] Feature1: User can zoom in and out of the graph using scroll wheel, but on laptop trackpad it seems to be activated by using two fingers going up and down, which is intuitive and hard to control. Instead it should be controllable by pinching in and out. 

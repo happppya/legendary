@@ -239,7 +239,7 @@ impl Realm {
             if let Some(qp) = node.quest_points {
                 if !crate::model::is_valid_quest_points(qp) {
                     errors.push(format!(
-                        "quest_points {qp} is not Fibonacci (1,2,3,5,8,13,21)"
+                        "quest_points {qp} is outside the accepted range 0–9999 (Fibonacci recommended)"
                     ));
                 }
             }
@@ -507,7 +507,7 @@ impl Realm {
         if let Some(qp) = n.quest_points {
             if !crate::model::is_valid_quest_points(qp) {
                 out.push(format!(
-                    "quest_points {qp} is outside the Fibonacci set: use one of 1, 2, 3, 5, 8, 13, 21"
+                    "quest_points {qp} is outside the accepted range: 0 to 9999 (Fibonacci values recommended)"
                 ));
             }
         }
@@ -753,7 +753,7 @@ mod tests {
         let mut realm = Realm::open(&dir).unwrap();
         let mut node = node_file("ACT-3002", NodeKind::Action, Some("MISSING-PARENT"), &[]).node;
         node.disciplines = vec!["Ghost/Skill".to_string()];
-        node.quest_points = Some(4);
+        node.quest_points = Some(10_000);
         node.landmark = Some("Missing_Landmark".to_string());
         node.blocked_by = vec!["MISSING-DEP".to_string()];
         realm

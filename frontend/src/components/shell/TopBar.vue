@@ -49,7 +49,7 @@ function onDblClick(e: MouseEvent) {
 
 <template>
   <header class="topbar" data-tauri-drag-region @dblclick="onDblClick">
-    <div class="topbar-left">
+    <div class="topbar-left" data-tauri-drag-region>
       <button
         type="button"
         class="brand-btn"
@@ -62,7 +62,7 @@ function onDblClick(e: MouseEvent) {
       <MenuBar :menus="menus" @run="emit('run', $event)" />
     </div>
 
-    <div class="topbar-mid">
+    <div class="topbar-mid" data-tauri-drag-region>
       <button type="button" class="palette" @click="emit('palette')">
         <span class="palette-kbd" aria-hidden="true">⌘K</span>
         <span class="palette-label">Command Palette&hellip;</span>
@@ -71,7 +71,7 @@ function onDblClick(e: MouseEvent) {
     </div>
 
     <div class="topbar-right" data-tauri-drag-region>
-      <div class="window-controls" :class="{ web: !isDesktop }">
+      <div class="window-controls" data-tauri-drag-region :class="{ web: !isDesktop }">
         <button
           type="button"
           class="wc"

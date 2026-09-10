@@ -213,30 +213,23 @@ const overlayMode = ref<OverlayMode>('none')
 /** Graph scope: local neighbourhood, whole realm, or genre overview. */
 const graphScope = ref<GraphScope>('local')
 const completionLevel = ref<CompletionLevel>(2)
-/** Last view chosen in the explorer list (workspace highlights as one row). */
-const navChoice = ref<'workspace' | 'graph' | 'table'>('graph')
-
+/** Which explorer row is active: the workspace highlights 'workspace'; a
+ * page highlights its own id (Bug7 removed graph/table as nav targets —
+ * they are panes inside the workspace, not pages). */
 const explorerActive = computed(() =>
-  page.value === 'workspace' ? navChoice.value : page.value,
+  page.value === 'workspace' ? 'workspace' : page.value,
 )
 
 function openView(id: string) {
   switch (id) {
-    // graph/table are tab-level views over the same workspace page: open
-    // the missing pane but never close its sibling (A-4 — closing is only
-    // ever explicit via a tab's ×), then stay on the workspace page.
+    // Graph and table are panes of the workspace (Bug7): they no longer
+    // exist as navigation targets. Selecting either (or the workspace)
+    // reopens both panes.
     case 'workspace':
     case 'graph':
     case 'table': {
-      if (id === 'workspace') {
-        showGraph.value = true
-        showTable.value = true
-      } else if (id === 'graph' && !showGraph.value) {
-        showGraph.value = true
-      } else if (id === 'table' && !showTable.value) {
-        showTable.value = true
-      }
-      navChoice.value = id as 'workspace' | 'graph' | 'table'
+      showGraph.value = true
+      showTable.value = true
       page.value = 'workspace'
       break
     }
@@ -666,7 +659,6 @@ function onGraphDropReparent(childId: string, parentId: string) {
 function openLocalGraph(id: string) {
   select(id)
   graphScope.value = 'local'
-  navChoice.value = 'graph'
   page.value = 'workspace'
 }
 const openPath = ref('examples/realm-demo')
@@ -724,8 +716,6 @@ const paletteCommands = computed<PaletteCommand[]>(() => {
     out.push({ id: 'node.wrapshortcut', title: 'Wrap in Card Group', hint: 'Ctrl+Shift+W' })
   }
   out.push({ id: 'view.workspace', title: 'Open Explorer workspace' })
-  out.push({ id: 'view.graph', title: 'Open Graph View', hint: showGraph.value ? undefined : 'reopen tab' })
-  out.push({ id: 'view.table', title: 'Switch to Table View', hint: showTable.value ? undefined : 'reopen tab' })
   out.push({ id: 'view.board', title: 'Switch to Board View' })
   out.push({ id: 'view.matrix', title: 'Open Landmark Matrix' })
   out.push({ id: 'view.calendar', title: 'Open Calendar' })
@@ -782,6 +772,8 @@ const menus = computed<MenuSpec[]>(() => {
       },
       { id: 'mock.restore', label: 'Back to Demo Realm', disabled: source.value !== 'realm' },
       { separator: true, id: 's2' },
+      { id: 'view.settings', label: 'Settings' },
+      { separator: true, id: 's3' },
       {
         id: 'file.quit',
         label: 'Quit',
@@ -809,25 +801,16 @@ const menus = computed<MenuSpec[]>(() => {
     ],
   }
 
-  const activeView: 'workspace' | 'graph' | 'table' | Page = (() => {
-    if (page.value === 'workspace') {
-      // Both tabs open → highlight the Explorer row; a single tab keeps its
-      // own view row highlighted (menu checks mirror the explorer list).
-      if (showGraph.value && showTable.value) return 'workspace'
-      return showGraph.value ? 'graph' : 'table'
-    }
-    return page.value
-  })()
-
-  const VIEW_ITEMS: { key: 'workspace' | 'graph' | 'table' | Page; label: string }[] = [
+  const VIEW_ITEMS: { key: 'workspace' | Page; label: string }[] = [
     { key: 'workspace', label: 'Explorer Workspace' },
-    { key: 'graph', label: 'Graph View' },
-    { key: 'table', label: 'Table View' },
     { key: 'board', label: 'Board View' },
     { key: 'matrix', label: 'Landmark Matrix' },
     { key: 'calendar', label: 'Calendar' },
     { key: 'entities', label: 'Entities' },
   ]
+
+  // Workspace highlights the Explorer row; a page highlights its own row.
+  const activeView: string = page.value === 'workspace' ? 'workspace' : page.value
 
   const view: MenuSpec = {
     id: 'view',
@@ -996,6 +979,8 @@ async function runMenu(id: string) {
     case 'view.calendar':
     case 'view.entities':
     case 'view.settings': {
+      // graph/table remain valid ids for menu/palette compatibility (Bug7):
+      // openView normalizes them to the workspace page.
       const target = id.slice('view.'.length)
       openView(target)
       break

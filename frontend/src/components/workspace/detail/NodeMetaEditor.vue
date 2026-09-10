@@ -3,7 +3,12 @@
 // the editable ECS components — status, priority, quest points, disciplines,
 // epics, landmark, dependencies — saving through the store → ops layer →
 // synchronous index. Vocabulary options come from the realm rows passed in;
-// validation (Fibonacci QP, known branches) is enforced by the engine.
+// validation (QP range, known branches) is enforced by the engine.
+//
+// Quest points use the shared controls/QpPicker (Fibonacci one-click
+// options + free-form 0–9999, Bug3); epics/disciplines use the shared
+// controls/TaxonomyChipEditor (hover ✕ removes, ➕ dropdown adds, no
+// duplicates possible, Bug4).
 //
 // Status of a Card follows the vanquish rule (doc 04 §4.3): switching a Card
 // to vanquished routes through the confirmation modal in App, not here.
@@ -11,8 +16,12 @@
 import { computed, ref, watch } from 'vue'
 import type { NodeView } from '../../../types'
 import { PRIORITIES } from '../../../lib/priority'
+import { parseQp } from '../../../lib/qp'
+import QpPicker from '../../controls/QpPicker.vue'
+import TaxonomyChipEditor from '../../controls/TaxonomyChipEditor.vue'
 
-const props = defineProps<{  node: NodeView
+const props = defineProps<{
+  node: NodeView
   canMutate: boolean
   busy: boolean
   /** Vocabulary rows from the realm (filters.ts builders). */
@@ -41,54 +50,53 @@ export interface MetaEdits {
 
 const priority = ref<string>(props.node.priority)
 const qpText = ref(props.node.questPoints === null ? '' : String(props.node.questPoints))
-const disciplines = ref<string[]>([...props.node.disciplines])
-const epics = ref<string[]>([...props.node.epics])
+/** Assigned values (deduplicated — one chip per key, Bug4). */
+const disciplines = ref<string[]>(dedupe(props.node.disciplines))
+const epics = ref<string[]>(dedupe(props.node.epics))
 const landmark = ref(props.node.explicitLandmark ?? '')
 const blockedByText = ref(props.node.blockedBy.join(', '))
+
+function dedupe(v: string[]): string[] {
+  return [...new Set(v)]
+}
+
+/* ---- chip editors (shared TaxonomyChipEditor emits add/remove) ---------- */
+
+function addDiscipline(key: string) {
+  if (!disciplines.value.includes(key)) disciplines.value = [...disciplines.value, key]
+}
+function removeDiscipline(key: string) {
+  disciplines.value = disciplines.value.filter((d) => d !== key)
+}
+function addEpic(key: string) {
+  if (!epics.value.includes(key)) epics.value = [...epics.value, key]
+}
+function removeEpic(key: string) {
+  epics.value = epics.value.filter((e) => e !== key)
+}
 
 watch(
   () => props.node.id,
   () => {
     priority.value = props.node.priority
     qpText.value = props.node.questPoints === null ? '' : String(props.node.questPoints)
-    disciplines.value = [...props.node.disciplines]
-    epics.value = [...props.node.epics]
+    disciplines.value = dedupe(props.node.disciplines)
+    epics.value = dedupe(props.node.epics)
     landmark.value = props.node.explicitLandmark ?? ''
     blockedByText.value = props.node.blockedBy.join(', ')
   },
 )
 
-/* ---- option lists ------------------------------------------------------ */
-
-const disciplineOptionsC = computed(() => {
-  const have = new Set(disciplines.value)
-  return props.disciplineOptions.map((o) => ({ ...o, on: have.has(o.key) }))
-})
-const epicOptionsC = computed(() => {
-  const have = new Set(epics.value)
-  return props.epicOptions.map((o) => ({ ...o, on: have.has(o.key) }))
-})
-const landmarkOptionsC = computed(() => props.landmarkOptions.map((o) => o.key))
-
-function toggleDiscipline(key: string) {
-  disciplines.value = disciplines.value.includes(key)
-    ? disciplines.value.filter((d) => d !== key)
-    : [...disciplines.value, key]
-}
-function toggleEpic(key: string) {
-  epics.value = epics.value.includes(key)
-    ? epics.value.filter((e) => e !== key)
-    : [...epics.value, key]
-}
-
 /* ---- dirty tracking + save ---------------------------------------------- */
 
 const qpDirty = computed(() => {
-  const parsed = qpText.value.trim()
-  if (parsed === '') return props.node.questPoints !== null
-  const n = Number(parsed)
-  return n !== props.node.questPoints
+  const parsed = parseQp(qpText.value)
+  if (parsed === 'invalid') return true
+  return parsed !== props.node.questPoints
 })
+
+/** QP is free-form 0–9999 (Bug3); '' clears the estimate. */
+const qpInvalid = computed(() => parseQp(qpText.value) === 'invalid')
 
 const landmarkDirty = computed(() => landmark.value !== (props.node.explicitLandmark ?? ''))
 
@@ -124,16 +132,15 @@ function joinSorted(v: string[]): string {
 }
 
 function saveMeta() {
-  if (!metaDirty.value) return
+  if (!metaDirty.value || qpInvalid.value) return
   const edits: MetaEdits = {}
   if (priority.value !== props.node.priority) edits.priority = priority.value
   if (qpDirty.value) {
-    const parsed = qpText.value.trim()
-    if (parsed === '') {
+    const parsed = parseQp(qpText.value)
+    if (parsed === null) {
       edits.clearQuestPoints = true
-    } else {
-      const n = Number(parsed)
-      if (Number.isInteger(n) && n > 0) edits.questPoints = n
+    } else if (parsed !== 'invalid') {
+      edits.questPoints = parsed
     }
   }
   if (joinSorted(disciplines.value) !== joinSorted(props.node.disciplines)) {
@@ -192,17 +199,10 @@ defineExpose({ metaDirty, saveMeta })
         </div>
       </div>
 
-      <!-- quest points -->
+      <!-- quest points: shared picker (Bug3) -->
       <div class="me-field">
         <span class="me-label">Quest points</span>
-        <input
-          v-model="qpText"
-          class="me-input mono"
-          type="text"
-          inputmode="numeric"
-          placeholder="1 2 3 5 8 13 21"
-          spellcheck="false"
-        />
+        <QpPicker v-model="qpText" :invalid="qpInvalid" :disabled="false" />
       </div>
 
       <!-- landmark -->
@@ -210,46 +210,32 @@ defineExpose({ metaDirty, saveMeta })
         <span class="me-label">Landmark</span>
         <select v-model="landmark" class="me-input">
           <option value="">— none —</option>
-          <option v-for="l in landmarkOptionsC" :key="l" :value="l">{{ l }}</option>
+          <option v-for="l in landmarkOptions" :key="l.key" :value="l.key">{{ l.label }}</option>
         </select>
       </div>
 
-      <!-- disciplines -->
+      <!-- disciplines: shared chip editor (Bug4) -->
       <div class="me-field">
         <span class="me-label">Disciplines</span>
-        <div class="chip-set">
-          <button
-            v-for="o in disciplineOptionsC"
-            :key="o.key"
-            type="button"
-            class="chip"
-            :class="{ on: o.on }"
-            :title="o.key"
-            @click="toggleDiscipline(o.key)"
-          >
-            {{ o.label }}
-          </button>
-          <span v-if="!disciplineOptionsC.length" class="me-none">none declared</span>
-        </div>
+        <TaxonomyChipEditor
+          :values="disciplines"
+          :options="disciplineOptions"
+          noun="discipline"
+          @add="addDiscipline"
+          @remove="removeDiscipline"
+        />
       </div>
 
-      <!-- epics -->
+      <!-- epics: shared chip editor (Bug4) -->
       <div class="me-field">
         <span class="me-label">Epics</span>
-        <div class="chip-set">
-          <button
-            v-for="o in epicOptionsC"
-            :key="o.key"
-            type="button"
-            class="chip"
-            :class="{ on: o.on }"
-            :title="o.key"
-            @click="toggleEpic(o.key)"
-          >
-            {{ o.label }}
-          </button>
-          <span v-if="!epicOptionsC.length" class="me-none">none declared</span>
-        </div>
+        <TaxonomyChipEditor
+          :values="epics"
+          :options="epicOptions"
+          noun="epic"
+          @add="addEpic"
+          @remove="removeEpic"
+        />
       </div>
 
       <!-- blocked_by -->
@@ -266,10 +252,11 @@ defineExpose({ metaDirty, saveMeta })
     </fieldset>
 
     <div v-if="canMutate" class="me-actions">
+      <span v-if="qpInvalid" class="me-err">Fix quest points to save.</span>
       <button
         type="button"
         class="me-save"
-        :disabled="!metaDirty || busy"
+        :disabled="!metaDirty || qpInvalid || busy"
         @click="saveMeta"
       >
         {{ busy ? 'Saving…' : metaDirty ? 'Save components' : 'Saved' }}
@@ -368,34 +355,9 @@ defineExpose({ metaDirty, saveMeta })
   border-color: var(--gold);
 }
 
-.chip-set {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.chip {
-  padding: 2px 9px;
-  border-radius: 999px;
-  border: 1px solid var(--line-1);
-  background: transparent;
-  color: var(--text-3);
-  font-size: 11px;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chip:hover {
-  border-color: var(--gold);
-  color: var(--gold);
-}
-
-.chip.on {
-  border-color: var(--gold);
-  color: var(--gold);
-  background: var(--inset);
+.me-err {
+  font-size: 10.5px;
+  color: var(--err-fg, #d07a74);
 }
 
 .me-none {
@@ -406,7 +368,9 @@ defineExpose({ metaDirty, saveMeta })
 .me-actions {
   margin-top: 14px;
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 10px;
 }
 
 .me-save {
